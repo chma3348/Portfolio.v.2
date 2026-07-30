@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chris Manning — Photography for people, places &amp; projects</title>
+<meta name="description" content="Photography for people, places &amp; projects. Landscape, travel and portrait work by Chris Manning — a portfolio you walk around: steer across a hand-drawn map to explore the galleries.">
+<meta name="author" content="Chris Manning">
+<meta property="og:title" content="Chris Manning — Photography for people, places &amp; projects">
+<meta property="og:description" content="Landscape, travel and portrait photography — a portfolio you can walk around.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="photos/full/Banner-4.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#f4f4f5">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23f7f6f3' stroke='%23303036' stroke-width='2.5'/%3E%3Cpath d='M16 5l3.2 11L16 27l-3.2-11z' fill='%23b23a2d'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Special+Elite&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<a class="skip-link" href="#siteNav">Skip to navigation</a>
+
+<!-- Real, crawlable navigation. Visually hidden; appears when keyboard-focused,
+     and shown plainly when JavaScript is unavailable. -->
+<nav id="siteNav" class="site-nav" aria-label="All sections">
+  <ul>
+    <li><a href="#/peaks">Peaks &amp; Wilds — landscape photography</a></li>
+    <li><a href="#/journeys">Journeys — travel photography</a></li>
+    <li><a href="#/portraits">Good Company — portrait photography</a></li>
+    <li><a href="#/everything">The Whole Lot — every photograph</a></li>
+    <li><a href="#/about">About me</a></li>
+    <li><a href="#/contact">Say hello</a></li>
+  </ul>
+</nav>
+<noscript>
+  <p class="noscript-note">This portfolio is normally a little walkable map — without JavaScript
+  you get the plain menu above instead. The photographs are worth it either way.</p>
+</noscript>
+
+<div class="hud">
+  <button class="brand-chip" id="brandBtn" aria-label="Chris Manning — back to the map">
+    <strong>Chris Manning</strong>
+    <span>people, places &amp; projects</span>
+  </button>
+
+  <p class="hint-chip" id="hintChip">
+    <span>walk — <kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> or click anywhere</span>
+    <span><kbd>esc</kbd> for contents</span>
+  </p>
+
+  <button class="compass-chip" id="compassBtn" aria-label="Open contents — jump to any section (or press Escape)">
+    <svg viewBox="0 0 40 40" aria-hidden="true">
+      <circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" stroke-width="2.5"/>
+      <g class="needle-spin"><path class="needle" d="M20 7l3.4 13L20 33l-3.4-13z"/></g>
+    </svg>
+    <span>contents</span>
+  </button>
+</div>
+
+<!-- appears at the edge when you walk there by clicking, since standing
+     still shouldn't quietly launch anything on its own -->
+<button class="trail-prompt" id="trailPrompt" hidden>hit the trail →</button>
+
+<!-- covers the seam between the map and the trail -->
+<div class="chase-fade" id="chaseFade" aria-hidden="true"></div>
+
+<!-- thumps in once you've been everywhere -->
+<div class="done-stamp" id="doneStamp" role="status" aria-live="polite">
+  <svg viewBox="0 0 240 240" aria-hidden="true">
+    <circle cx="120" cy="120" r="104" fill="none" stroke="currentColor" stroke-width="7" stroke-dasharray="13 11"/>
+    <circle cx="120" cy="120" r="92" fill="none" stroke="currentColor" stroke-width="3"/>
+    <text x="120" y="102" text-anchor="middle">FIELD TRIP</text>
+    <text x="120" y="140" text-anchor="middle">COMPLETE</text>
+    <text class="ds-sub" x="120" y="177" text-anchor="middle">every page walked</text>
+  </svg>
+</div>
+
+<main>
+  <h1 class="visually-hidden">Chris Manning — photography for people, places &amp; projects. Landscape, travel and portrait galleries, presented as a small walkable hand-drawn map.</h1>
+
+  <div class="stage">
+  <svg id="world" aria-label="Hand-drawn map. The galleries, about page and contact page are drawings on the map — click one to open it.">
+    <defs>
+      <filter id="roughen" x="-6%" y="-6%" width="112%" height="112%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.016" numOctaves="2" seed="7" result="n"/>
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="5.5"/>
+      </filter>
+      <filter id="grain">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" seed="3" result="g"/>
+        <feColorMatrix in="g" type="matrix" values="0 0 0 0 0.2  0 0 0 0 0.2  0 0 0 0 0.2  0 0 0 0.04 0"/>
+        <feComposite operator="in" in2="SourceGraphic"/>
+      </filter>
+      <pattern id="dots" width="30" height="30" patternUnits="userSpaceOnUse">
+        <circle cx="15" cy="15" r="1.15" class="dot"/>
+      </pattern>
+      <!-- irregular tile so the night sky doesn't read as a grid -->
+      <pattern id="starfield" width="197" height="173" patternUnits="userSpaceOnUse">
+        <circle class="star" cx="24"  cy="38"  r="1.4"/>
+        <circle class="star" cx="121" cy="17"  r="1"/>
+        <circle class="star" cx="163" cy="97"  r="1.7"/>
+        <circle class="star" cx="71"  cy="121" r="1.1"/>
+        <circle class="star" cx="14"  cy="151" r="0.9"/>
+        <circle class="star" cx="99"  cy="70"  r="0.8"/>
+        <circle class="star" cx="186" cy="140" r="1.2"/>
+        <circle class="star" cx="48"  cy="88"  r="0.85"/>
+      </pattern>
+    </defs>
+
+    <!-- ======================= PAPER ======================= -->
+    <rect id="paperRect" class="paper-fill" x="0" y="0" width="100%" height="100%"/>
+    <rect id="dotsRect"  x="0" y="0" width="100%" height="100%" fill="url(#dots)"/>
+    <rect id="starsRect" x="0" y="0" width="100%" height="100%" fill="url(#starfield)"/>
+    <rect id="grainRect" x="0" y="0" width="100%" height="100%" fill="#fff" filter="url(#grain)"/>
+
+    <!-- ======================= INK =======================
+         The roughen filter is applied per-group, never to the whole
+         layer — whole-layer displacement re-renders every frame and
+         destroys the frame rate. -->
+    <g id="inkLayer">
+
+      <path id="routePath" class="pencil-route" d="" filter="url(#roughen)"/>
+
+      <!-- coffee ring -->
+      <g id="decorRing" class="pencil">
+        <circle r="36" fill="none" stroke="currentColor" stroke-width="7" opacity="0.09"/>
+        <circle r="33" fill="none" stroke="currentColor" stroke-width="1.6" opacity="0.13"/>
+      </g>
+
+      <g id="decorSun" class="ink-decor egg" tabindex="0" role="button"
+         aria-pressed="false" aria-label="Turn the map to night">
+        <circle class="egg-halo" r="44"/>
+        <g class="sun-only" filter="url(#roughen)">
+          <circle r="19" fill="none" stroke="currentColor" stroke-width="3"/>
+          <g stroke="currentColor" stroke-width="3" stroke-linecap="round">
+            <path d="M0,-27 L0,-35"/><path d="M19,-19 L25,-25"/><path d="M27,0 L35,0"/><path d="M19,19 L25,25"/>
+            <path d="M0,27 L0,35"/><path d="M-19,19 L-25,25"/><path d="M-27,0 L-35,0"/><path d="M-19,-19 L-25,-25"/>
+          </g>
+        </g>
+        <g class="moon-only" filter="url(#roughen)">
+          <path d="M5,-19 A19,19 0 1,0 5,19 A23,23 0 0,1 5,-19 Z"
+                fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+          <circle cx="-7" cy="-4" r="2.4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <circle cx="-3" cy="6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        </g>
+      </g>
+
+      <g id="decorCompass" class="ink-decor" filter="url(#roughen)">
+        <circle r="46" fill="none" stroke="currentColor" stroke-width="3"/>
+        <circle r="37" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="1 7" stroke-linecap="round"/>
+        <path d="M0,-46 L8,0 L0,46 L-8,0 Z" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M-46,0 L0,8 L46,0 L0,-8 Z" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path class="crimson-fill" d="M0,-33 L7,0 L-7,0 Z"/>
+        <path d="M0,33 L7,0 L-7,0 Z" fill="none" stroke="currentColor" stroke-width="2"/>
+        <text class="hand-sm knock" x="0" y="-56" text-anchor="middle">N</text>
+        <text class="hand-sm knock" x="58" y="5" text-anchor="middle">E</text>
+        <text class="hand-sm knock" x="0" y="68" text-anchor="middle">S</text>
+        <text class="hand-sm knock" x="-58" y="5" text-anchor="middle">W</text>
+      </g>
+
+      <!-- each bird is two wings so they can actually flap -->
+      <g id="decorBirds" class="ink-decor" filter="url(#roughen)">
+        <g class="bird b1">
+          <path class="wing wl" d="M0,0 C-3,-5 -7,-6 -10,-3"/>
+          <path class="wing wr" d="M0,0 C3,-5 7,-6 10,-3"/>
+        </g>
+        <g class="bird b2" transform="translate(33,-17)">
+          <path class="wing wl" d="M0,0 C-2.6,-4.4 -6,-5.3 -8.6,-2.6"/>
+          <path class="wing wr" d="M0,0 C2.6,-4.4 6,-5.3 8.6,-2.6"/>
+        </g>
+        <g class="bird b3" transform="translate(19,14)">
+          <path class="wing wl" d="M0,0 C-2.2,-3.7 -5,-4.5 -7.3,-2.2"/>
+          <path class="wing wr" d="M0,0 C2.2,-3.7 5,-4.5 7.3,-2.2"/>
+        </g>
+      </g>
+
+      <g id="decorScale" class="ink-decor" filter="url(#roughen)">
+        <path class="ink thin" d="M-60,0 L60,0 M-60,-8 L-60,8 M0,-5 L0,5 M60,-8 L60,8"/>
+        <text class="hand-sm knock" x="0" y="27" text-anchor="middle">a day's walk</text>
+      </g>
+
+      <text id="signature" class="hand-sig knock" text-anchor="end">— C.M.</text>
+
+      <!-- earned once you've run off the map and got somewhere -->
+      <g id="signpost" tabindex="0" role="button" style="display:none">
+        <path class="sp-ink" d="M0,54 L0,-2"/>
+        <path class="sp-board" d="M-58,-40 L34,-40 L52,-21 L34,-2 L-58,-2 Z"/>
+        <text id="signpostText" x="-12" y="-15">0 m</text>
+        <path class="sp-ink" d="M-14,44 L14,44"/>
+      </g>
+
+      <!-- ======================= LANDMARKS ======================= -->
+
+      <g class="landmark" id="lm-peaks" data-section="peaks" tabindex="0" role="button"
+         aria-label="Peaks and Wilds — open the landscape gallery">
+        <circle class="lm-halo" r="122"/>
+        <g class="lm-art" filter="url(#roughen)">
+          <path class="ink" d="M-95,42 L-48,-30 L-12,28"/>
+          <path class="ink" d="M-40,42 L18,-58 L78,42"/>
+          <path class="ink thin" d="M-2,-22 L8,-32 L14,-22 L22,-32 L30,-22"/>
+          <path class="ink thin" d="M-72,42 L-64,22 L-56,42 M-64,42 L-64,47"/>
+          <path class="ink thin" d="M56,42 L63,26 L70,42 M63,42 L63,47"/>
+        </g>
+        <text class="lm-label knock" x="0" y="88">Peaks &amp; Wilds</text>
+        <path class="lm-underline" d="M-72,100 C-40,106 40,102 72,99"/>
+        <g class="enter-tip" transform="translate(0,126)">
+          <rect x="-48" y="-15" width="96" height="30" rx="15"/>
+          <text x="0" y="5">⏎ open</text>
+        </g>
+        <g class="stamp" transform="translate(100,-64) rotate(-12)">
+          <circle r="28"/>
+          <text y="-2">been</text>
+          <text y="12">here</text>
+        </g>
+      </g>
+
+      <g class="landmark" id="lm-journeys" data-section="journeys" tabindex="0" role="button"
+         aria-label="Journeys — open the travel gallery">
+        <circle class="lm-halo" r="122"/>
+        <g class="lm-art" filter="url(#roughen)">
+          <path class="ink thin" stroke-dasharray="1 9" d="M-98,40 C-70,-30 -20,44 26,-14"/>
+          <!-- a real aeroplane, seen from above -->
+          <g transform="translate(34,-14) rotate(18)">
+            <path class="ink" d="M0,-34 C3,-34 5,-26 5,-14 L5,8 C5,15 3,19 0,21
+              C-3,19 -5,15 -5,8 L-5,-14 C-5,-26 -3,-34 0,-34 Z"/>
+            <path class="ink thin" d="M-5,-10 L-34,6 L-34,12 L-5,2 Z"/>
+            <path class="ink thin" d="M5,-10 L34,6 L34,12 L5,2 Z"/>
+            <path class="ink thin" d="M-4,10 L-16,17 L-16,21 L-4,16 Z"/>
+            <path class="ink thin" d="M4,10 L16,17 L16,21 L4,16 Z"/>
+          </g>
+          <g transform="translate(-64,-38) rotate(-10)">
+            <rect class="ink thin" x="-21" y="-14" width="42" height="28" rx="3"/>
+            <rect class="ink hairline" x="-15" y="-8" width="30" height="16"/>
+          </g>
+          <g transform="translate(78,38) rotate(7)">
+            <rect class="ink thin" x="-22" y="-15" width="44" height="30" rx="3"/>
+            <rect class="ink hairline" x="-16" y="-9" width="32" height="18"/>
+          </g>
+        </g>
+        <text class="lm-label knock" x="0" y="88">Journeys</text>
+        <path class="lm-underline" d="M-52,100 C-25,106 28,102 52,99"/>
+        <g class="enter-tip" transform="translate(0,126)">
+          <rect x="-48" y="-15" width="96" height="30" rx="15"/>
+          <text x="0" y="5">⏎ open</text>
+        </g>
+        <g class="stamp" transform="translate(98,-66) rotate(9)">
+          <circle r="28"/>
+          <text y="-2">been</text>
+          <text y="12">here</text>
+        </g>
+      </g>
+
+      <g class="landmark" id="lm-portraits" data-section="portraits" tabindex="0" role="button"
+         aria-label="Good Company — open the portrait gallery">
+        <circle class="lm-halo" r="122"/>
+        <g class="lm-art" filter="url(#roughen)">
+          <!-- camera body on a tripod, lens toward the viewer. No figure in
+               front of it — it read as a second walking character. -->
+          <g transform="translate(5,0)">
+            <path class="ink" d="M-44,-30 L34,-30 L34,16 L-44,16 Z"/>
+            <path class="ink thin" d="M-30,-30 L-24,-40 L4,-40 L10,-30"/>
+            <circle class="ink" cx="-5" cy="-7" r="17"/>
+            <circle class="ink thin" cx="-5" cy="-7" r="9"/>
+            <path class="crimson-fill" d="M22,-24 a4.5,4.5 0 1,0 0.1,0 Z"/>
+            <!-- legs -->
+            <path class="ink" d="M-8,16 L-30,64"/>
+            <path class="ink" d="M2,16 L24,64"/>
+            <path class="ink thin" d="M-3,16 L-3,58"/>
+            <path class="ink hairline" d="M-20,42 L14,42"/>
+          </g>
+        </g>
+        <text class="lm-label knock" x="0" y="88">Good Company</text>
+        <path class="lm-underline" d="M-68,100 C-36,106 36,102 68,99"/>
+        <g class="enter-tip" transform="translate(0,126)">
+          <rect x="-48" y="-15" width="96" height="30" rx="15"/>
+          <text x="0" y="5">⏎ open</text>
+        </g>
+        <g class="stamp" transform="translate(100,-62) rotate(-10)">
+          <circle r="28"/>
+          <text y="-2">been</text>
+          <text y="12">here</text>
+        </g>
+      </g>
+
+      <g class="landmark" id="lm-about" data-section="about" tabindex="0" role="button"
+         aria-label="About me — open the about page">
+        <circle class="lm-halo" r="114"/>
+        <g class="lm-art" filter="url(#roughen)">
+          <path class="ink" d="M-84,40 L-38,-38 L8,40"/>
+          <path class="ink thin" d="M-84,40 L8,40"/>
+          <path class="ink thin" d="M-38,-38 L-38,40"/>
+          <path class="ink thin" d="M-52,40 L-38,8 L-24,40"/>
+          <path class="ink thin" d="M38,40 L66,33 M40,33 L64,40"/>
+          <path class="ink thin ember" d="M52,28 C44,18 52,13 48,3 C56,11 60,20 52,28"/>
+          <path class="ink hairline smoke" d="M50,-4 c-4,-8 4,-12 0,-20"/>
+          <path class="ink hairline smoke" d="M55,-10 c-3,-7 3,-10 0,-16"/>
+        </g>
+        <text class="lm-label knock" x="0" y="88">About me</text>
+        <path class="lm-underline" d="M-56,100 C-28,106 30,102 56,99"/>
+        <g class="enter-tip" transform="translate(0,126)">
+          <rect x="-48" y="-15" width="96" height="30" rx="15"/>
+          <text x="0" y="5">⏎ open</text>
+        </g>
+        <g class="stamp" transform="translate(94,-60) rotate(-8)">
+          <circle r="28"/>
+          <text y="-2">been</text>
+          <text y="12">here</text>
+        </g>
+      </g>
+
+      <g class="landmark" id="lm-contact" data-section="contact" tabindex="0" role="button"
+         aria-label="Say hello — open the contact page">
+        <circle class="lm-halo" r="114"/>
+        <g class="lm-art" filter="url(#roughen)">
+          <path class="ink" d="M-6,46 L-6,12"/>
+          <rect class="ink" x="-42" y="-38" width="76" height="48" rx="10"/>
+          <path class="ink thin" d="M-28,-22 L22,-22"/>
+          <path class="ink thin" d="M42,-34 L42,-10"/>
+          <path class="crimson-fill" d="M42,-34 L60,-27 L42,-20 Z"/>
+          <g transform="translate(-78,-56) rotate(-12)">
+            <rect class="ink thin" x="-13" y="-9" width="26" height="18" rx="2"/>
+            <path class="ink hairline" d="M-13,-9 L0,2 L13,-9"/>
+          </g>
+          <path class="ink hairline" stroke-dasharray="2 7" d="M-88,-40 c-8,10 -2,20 -12,30"/>
+        </g>
+        <text class="lm-label knock" x="0" y="88">Say hello</text>
+        <path class="lm-underline" d="M-54,100 C-27,106 28,102 54,99"/>
+        <g class="enter-tip" transform="translate(0,126)">
+          <rect x="-48" y="-15" width="96" height="30" rx="15"/>
+          <text x="0" y="5">⏎ open</text>
+        </g>
+        <g class="stamp" transform="translate(96,-62) rotate(11)">
+          <circle r="28"/>
+          <text y="-2">been</text>
+          <text y="12">here</text>
+        </g>
+      </g>
+
+      <!-- you-are-here note (fades after first move) -->
+      <g id="startNote" class="ink-decor">
+        <path d="M-58,-64 C-30,-72 -14,-58 -4,-34"/>
+        <path d="M-12,-40 L-4,-34 L-14,-30"/>
+        <text class="hand-note knock" x="-64" y="-74" text-anchor="end">you are here</text>
+      </g>
+    </g>
+  </svg>
+
+  <!-- Actors live in their own svg so per-frame movement never
+       invalidates the filtered artwork behind them. -->
+  <svg id="actors">
+    <polyline id="trail" points="" aria-hidden="true"/>
+
+    <!-- the fetching stick: shadow stays on the ground while it arcs -->
+    <g id="stickWrap" aria-hidden="true">
+      <ellipse id="stickShadow" rx="7" ry="2.2"/>
+      <g id="stickBody">
+        <path class="stick-art" d="M-9,0 L9,0 M4.5,0 L8.5,-4 M-4,0 L-7,3.4"/>
+      </g>
+    </g>
+
+    <!-- the dog: drawn before the hiker so they read as walking alongside -->
+    <g id="dog" tabindex="0" role="button">
+      <ellipse class="dog-shadow" cx="0" cy="1" rx="10.5" ry="3.1" aria-hidden="true"/>
+      <g id="dogScale">
+        <circle class="dog-hit" cx="4" cy="-12" r="17"/>
+        <g id="dogInner">
+        <g id="dogWalk">
+          <!-- far side legs first, so the near pair reads in front -->
+          <g class="dog-leg dog-leg-ff"><path d="M6,-9.4 L5.2,-1"/></g>
+          <g class="dog-leg dog-leg-bf"><path d="M-10.4,-9.8 L-11.8,-5.5 L-10.6,-1"/></g>
+
+          <!-- bushy, carried low, emerging from behind the rump -->
+          <g transform="translate(-13.2,-12.5)">
+            <g class="dog-tail">
+              <path class="dog-tail-shape" d="M0,0 C-3,1.5 -5.5,5 -6.5,9.5 C-5,10 -3,9 -2,7 C-1,4.5 -0.2,2 0,0 Z"/>
+            </g>
+          </g>
+
+          <!-- one silhouette: muzzle, ears, sloping back, chest, belly -->
+          <path class="dog-body" d="M19.8,-19.9
+            C19,-21 17.3,-21.5 15,-21.6
+            L13.6,-22.4 L15,-28.4 L11.9,-23.1
+            L11.4,-23.2 L10.4,-27.9 L9,-23.4
+            C8.6,-22.4 7,-19.6 4.2,-18.2
+            C-0.5,-17.4 -6,-16.6 -10.5,-15.6
+            C-13,-15 -14,-13.5 -13.4,-11.8
+            C-12.8,-10.4 -11.6,-9.6 -10.6,-9.4
+            C-5,-8.8 1,-8.9 6,-9.4
+            C8.4,-9.7 10.4,-11 11.6,-13.2
+            C12.6,-15 13.4,-16.5 14.8,-17.4
+            C16.4,-18 18,-18.4 18.9,-18.7
+            C19.6,-19 20,-19.4 19.8,-19.9 Z"/>
+
+          <!-- the black mantle over a tan dog: the shepherd's whole tell -->
+          <path class="dog-mantle" d="M15,-21.6
+            L13.6,-22.4 L15,-28.4 L11.9,-23.1
+            L11.4,-23.2 L10.4,-27.9 L9,-23.4
+            C8.6,-22.4 7,-19.6 4.2,-18.2
+            C-0.5,-17.4 -6,-16.6 -10.5,-15.6
+            C-13,-15 -14,-13.5 -13.4,-11.8
+            C-12.6,-12.2 -11,-12.6 -9,-12.9
+            C-4,-13.6 1,-14.4 6,-15.9
+            C10,-17.1 13,-19.2 15,-21.6 Z"/>
+
+          <!-- the dark mask along the muzzle -->
+          <path class="dog-mantle" d="M15,-21.6 C17.3,-21.5 19,-21 19.8,-19.9
+            C20,-19.5 19.7,-19.1 19.1,-19.1 C17.5,-19.7 15.9,-20.5 15,-21.6 Z"/>
+          <circle class="dog-eye" cx="15.4" cy="-19.9" r="0.8"/>
+          <path class="dog-collar" d="M12.2,-19.3 L11,-16.3"/>
+
+          <g class="dog-leg dog-leg-fn"><path d="M9,-9.5 L8,-1"/></g>
+          <g class="dog-leg dog-leg-bn"><path d="M-8,-10 L-9.4,-5.5 L-8,-1"/></g>
+        </g>
+
+        <!-- curled up for the night -->
+        <g id="dogCurl">
+          <path class="dog-tail-shape" d="M11,-4.5 C15.5,-5.5 17,-1.5 13.5,0.2 C10,1.6 6,0.8 3.5,-0.6 C6.5,-1.4 9,-2.6 11,-4.5 Z"/>
+          <ellipse class="dog-body" cx="0" cy="-6.5" rx="12.5" ry="6.8"/>
+          <path class="dog-mantle" d="M-12.4,-7.4 C-11.4,-12 -6.4,-14.4 0,-14.4 C6.4,-14.4 11.4,-12 12.4,-7.4
+            C8.6,-10.6 4.4,-11.8 0,-11.8 C-4.4,-11.8 -8.6,-10.6 -12.4,-7.4 Z"/>
+          <ellipse class="dog-body" cx="-9.5" cy="-3.6" rx="6.2" ry="4.4"/>
+          <path class="dog-stroke" d="M-12.6,-6.4 L-14.4,-11 L-10.4,-7.4"/>
+          <path class="dog-stroke" d="M-9.6,-7.2 L-9.8,-11.8 L-6.6,-7.6"/>
+          <path class="dog-stroke" d="M-13.4,-2.6 C-14.6,-2.2 -15,-1.4 -14.6,-0.6"/>
+          <circle class="dog-eye-shut" cx="-11.6" cy="-4" r="1.5"/>
+        </g>
+        </g>
+      </g>
+    </g>
+
+    <g id="hiker" aria-hidden="true">
+      <g id="hikerScale">
+        <ellipse class="hiker-shadow" cx="0" cy="1" rx="15" ry="4.5"/>
+        <g id="hikerInner">
+          <g id="hikerWalk">
+            <g class="leg leg-l"><path d="M0,-17 L-6,-8 L-8,-1 M-8,-1 L-13,-1"/></g>
+            <g class="leg leg-r"><path d="M0,-17 L6,-8 L7,-1 M7,-1 L12,-1"/></g>
+            <path class="hiker-line" d="M0,-17 L0,-31"/>
+            <rect class="hiker-pack" x="-13.5" y="-32" width="10" height="14" rx="3.5"/>
+            <path class="hiker-line" d="M0,-28 L-8,-21"/>
+            <path class="hiker-line arm-r" d="M0,-28 L8.5,-22"/>
+            <circle class="hiker-head" cx="1" cy="-38" r="6.5"/>
+            <path class="hiker-line thin" d="M-5.5,-41 C-2,-45 4,-45 7.5,-41"/>
+          </g>
+
+          <!-- sat down for the night: pack off, knees up, propped on one arm -->
+          <g id="hikerSit">
+            <rect class="hiker-pack" x="21" y="-9" width="8" height="8" rx="2.5"/>
+            <path class="hiker-line" d="M0,-8 L9,-16 L13,-1 M13,-1 L18,-1"/>
+            <path class="hiker-line" d="M0,-8 L-1,-23"/>
+            <path class="hiker-line" d="M-1,-22 L-10,-8 L-14,-6"/>
+            <path class="hiker-line" d="M-1,-22 L7,-16"/>
+            <circle class="hiker-head" cx="-1.5" cy="-30" r="6.5"/>
+            <path class="hiker-line thin" d="M-8,-33 C-4.5,-37 1.5,-37 5,-33"/>
+          </g>
+        </g>
+
+        <g id="zzz" transform="translate(9,-44)">
+          <text class="z z1" x="0" y="0">z</text>
+          <text class="z z2" x="6.5" y="-7">z</text>
+          <text class="z z3" x="14" y="-15">z</text>
+        </g>
+      </g>
+    </g>
+
+    <g id="dogSpeak" aria-hidden="true">
+      <text class="dog-say knock" x="0" y="0" text-anchor="middle">woof!</text>
+    </g>
+
+    <!-- breaks cover when you lean on the edge, and Felix goes after it -->
+    <g id="mapSquirrel" aria-hidden="true" style="display:none">
+      <g class="sq-flip">
+        <path class="sq-tail" d="M-7,-4 C-19,-7 -26,-21 -18,-32 C-11,-41 0,-38 4,-31
+          C-2,-33 -9,-30 -12,-23 C-15,-15 -11,-8 -4,-5 Z"/>
+        <path class="sq-leg" d="M-5,-2 L-6,3 M3,-2 L4,3 M-1,-2 L-1,3"/>
+        <ellipse class="sq-body" cx="0" cy="-9" rx="9" ry="7"/>
+        <circle class="sq-body" cx="9" cy="-15" r="5.4"/>
+        <path class="sq-body" d="M13,-16 C17,-15 18,-13 13,-11 Z"/>
+        <path class="sq-ear" d="M7,-20 C6,-25 11,-25 10.5,-20 Z"/>
+        <circle class="sq-eye" cx="11" cy="-16" r="1.15"/>
+      </g>
+    </g>
+
+    <!-- appears when you lean on the edge of the paper -->
+    <g id="edgeHint" aria-hidden="true">
+      <path id="edgeHintLine" d=""/>
+      <text id="edgeHintText" class="knock" x="0" y="0">off the map</text>
+    </g>
+  </svg>
+  </div>
+</main>
+
+<!-- ======================= OVERLAY PAGES ======================= -->
+
+<dialog class="page-dlg gallery-dlg" id="dlg-peaks" aria-labelledby="ttl-peaks">
+  <header class="dlg-head">
+    <div>
+      <h2 class="dlg-title" id="ttl-peaks">Peaks &amp; Wilds</h2>
+      <p class="dlg-sub" id="sub-peaks"></p>
+    </div>
+    <button class="dlg-close" data-close aria-label="Close and return to the map">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 C11 10, 14 14, 19 19 M19 5 C14 10, 10 14, 5 19"/></svg>
+    </button>
+  </header>
+  <div class="gal-grid" id="grid-peaks"></div>
+  <footer class="gal-more">
+    <button class="gal-more-btn">the whole lot →</button>
+  </footer>
+</dialog>
+
+<dialog class="page-dlg gallery-dlg" id="dlg-journeys" aria-labelledby="ttl-journeys">
+  <header class="dlg-head">
+    <div>
+      <h2 class="dlg-title" id="ttl-journeys">Journeys</h2>
+      <p class="dlg-sub" id="sub-journeys"></p>
+    </div>
+    <button class="dlg-close" data-close aria-label="Close and return to the map">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 C11 10, 14 14, 19 19 M19 5 C14 10, 10 14, 5 19"/></svg>
+    </button>
+  </header>
+  <div class="gal-grid" id="grid-journeys"></div>
+  <footer class="gal-more">
+    <button class="gal-more-btn">the whole lot →</button>
+  </footer>
+</dialog>
+
+<dialog class="page-dlg gallery-dlg" id="dlg-portraits" aria-labelledby="ttl-portraits">
+  <header class="dlg-head">
+    <div>
+      <h2 class="dlg-title" id="ttl-portraits">Good Company</h2>
+      <p class="dlg-sub" id="sub-portraits"></p>
+    </div>
+    <button class="dlg-close" data-close aria-label="Close and return to the map">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 C11 10, 14 14, 19 19 M19 5 C14 10, 10 14, 5 19"/></svg>
+    </button>
+  </header>
+  <div class="gal-grid" id="grid-portraits"></div>
+  <footer class="gal-more">
+    <button class="gal-more-btn">the whole lot →</button>
+  </footer>
+</dialog>
+
+<!-- reached by walking off the top or bottom of the map -->
+<dialog class="page-dlg gallery-dlg" id="dlg-everything" aria-labelledby="ttl-everything">
+  <header class="dlg-head">
+    <div>
+      <h2 class="dlg-title" id="ttl-everything">The Whole Lot</h2>
+      <p class="dlg-sub" id="sub-everything"></p>
+    </div>
+    <button class="dlg-close" data-close aria-label="Close and return to the map">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 C11 10, 14 14, 19 19 M19 5 C14 10, 10 14, 5 19"/></svg>
+    </button>
+  </header>
+  <div class="gal-grid" id="grid-everything"></div>
+</dialog>
+
+<dialog class="page-dlg paper-dlg" id="dlg-about" aria-labelledby="ttl-about">
+  <article class="sheet">
+    <button class="dlg-close" data-close aria-label="Close and return to the map">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 C11 10, 14 14, 19 19 M19 5 C14 10, 10 14, 5 19"/></svg>
+    </button>
+    <h2 id="ttl-about">About me</h2>
+    <figure class="polaroid">
+      <img id="aboutPhoto" alt="" loading="lazy">
+      <figcaption id="aboutCaption"></figcaption>
+    </figure>
+    <p>Hey there! I’m Chris, born and raised in Colorado and recently back in the US
+    after spending a few incredible years living in Sydney, Australia.</p>
+    <p>My love for photography started with a passion for travel, the outdoors, and
+    chasing new experiences. I gave professional photography a try full-time, but I
+    quickly realized it took the joy out of it. Being limited to certain types of work
+    and clients made it feel more like a job than a creative outlet.</p>
+    <p>So I took a step back. These days, photography is still a big part of my life,
+    but I approach it on my own terms. I take on projects that inspire me, work with
+    people I genuinely enjoy, and charge what feels fair without the pressure of making
+    a living from every shoot.</p>
+    <p>For me, photography is about connection. It's about people, places, and
+    capturing meaningful moments. If you have a project in mind and want someone who
+    brings creative energy and care to the process, let’s connect. I’d love to help
+    bring your vision to life.</p>
+    <p class="sig">— Chris</p>
+  </article>
+</dialog>
+
+<dialog class="page-dlg paper-dlg" id="dlg-contact" aria-labelledby="ttl-contact">
+  <article class="sheet postcard">
+    <button class="dlg-close" data-close aria-label="Close and return to the map">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 C11 10, 14 14, 19 19 M19 5 C14 10, 10 14, 5 19"/></svg>
+    </button>
+    <div class="pc-write">
+      <h2 id="ttl-contact">Say hello</h2>
+      <p>Let's work together.</p>
+
+      <form id="contactForm" novalidate>
+        <div class="field">
+          <label for="cf-name">Your name</label>
+          <input id="cf-name" name="name" type="text" autocomplete="name" required>
+        </div>
+        <div class="field">
+          <label for="cf-email">Your email address</label>
+          <input id="cf-email" name="email" type="email" autocomplete="email" required>
+        </div>
+        <div class="field">
+          <label for="cf-message">Your message</label>
+          <textarea id="cf-message" name="message" rows="4" required></textarea>
+        </div>
+        <button class="btn-mail" type="submit" id="cfSend">Send it</button>
+        <p class="form-status" id="cfStatus" role="status" aria-live="polite"></p>
+      </form>
+    </div>
+
+    <div class="pc-side">
+      <div class="pc-stamp" aria-hidden="true">
+        <svg viewBox="0 0 60 60">
+          <rect x="4" y="4" width="52" height="52" rx="3" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="4 4"/>
+          <path d="M14 42 L26 22 L34 34 L40 26 L48 42 Z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+          <path d="M12 50 C22 47 40 47 50 50" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+      </div>
+
+      <div class="addr">
+        <span class="addr-name">Chris Manning</span>
+        <span id="addrLocation"></span>
+      </div>
+
+      <!-- email stays behind a sum, the way it does on chrisclicks.com -->
+      <div class="reveal">
+        <button type="button" class="btn-reveal" id="revealBtn">Show email</button>
+
+        <div class="captcha" id="captchaBox" hidden>
+          <label for="captchaAnswer" id="captchaQuestion">Please solve to reveal email:</label>
+          <div class="captcha-row">
+            <input id="captchaAnswer" type="text" inputmode="numeric" autocomplete="off" size="4">
+            <button type="button" id="captchaSubmit">Submit</button>
+          </div>
+          <p class="captcha-error" id="captchaError" role="alert" hidden>Incorrect, try again.</p>
+        </div>
+
+        <p class="revealed" id="emailBox" hidden>
+          <a id="mailLink" href="#"></a>
+        </p>
+      </div>
+    </div>
+  </article>
+</dialog>
+
+<dialog class="page-dlg paper-dlg contents-dlg" id="dlg-contents" aria-labelledby="ttl-contents">
+  <article class="sheet">
+    <button class="dlg-close" data-close aria-label="Close contents">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 C11 10, 14 14, 19 19 M19 5 C14 10, 10 14, 5 19"/></svg>
+    </button>
+    <h2 id="ttl-contents">Contents</h2>
+    <nav aria-label="Fast travel">
+      <ol id="contentsList"></ol>
+    </nav>
+    <p class="contents-note">…or close this and simply walk there — arrow keys, or tap anywhere on the map.</p>
+    <p class="contents-note contents-tip">Press <kbd>T</kbd> to throw a stick for <span id="dogNameTip"></span>.</p>
+    <p class="colophon" id="colophon"></p>
+  </article>
+</dialog>
+
+<dialog class="lightbox" id="dlg-lightbox" aria-label="Photo viewer">
+  <button class="dlg-close lb-close" data-close aria-label="Close photo">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 C11 10, 14 14, 19 19 M19 5 C14 10, 10 14, 5 19"/></svg>
+  </button>
+  <button class="lb-nav lb-prev" id="lbPrev" aria-label="Previous photo">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4 C11 9, 9 10, 6 12 C9 14, 11 15, 15 20"/></svg>
+  </button>
+  <figure>
+    <img id="lbImg" alt="">
+    <figcaption><span id="lbCap"></span><span id="lbPlace" class="lb-place"></span></figcaption>
+  </figure>
+  <button class="lb-nav lb-next" id="lbNext" aria-label="Next photo">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 C13 9, 15 10, 18 12 C15 14, 13 15, 9 20"/></svg>
+  </button>
+  <p class="lb-count" id="lbCount"></p>
+</dialog>
+
+<script src="photos.js"></script>
+<script src="runner.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

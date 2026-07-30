@@ -1,0 +1,1474 @@
+/* ============================================================
+   FIELD NOTES — a walkable hand-drawn map portfolio
+   paper + ink + one crimson accent; photographs carry all color
+   ============================================================ */
+
+:root {
+  /* palette (OKLCH) */
+  --paper:         oklch(0.972 0.002 250);
+  --paper-warm:    oklch(0.955 0.004 250);
+  --ink:           oklch(0.25 0.012 270);
+  --ink-muted:     oklch(0.45 0.012 270);
+  --pencil:        oklch(0.70 0.008 270);
+  --crimson:       oklch(0.55 0.185 28);
+  --crimson-deep:  oklch(0.47 0.17 28);
+  --crimson-lift:  oklch(0.68 0.155 30);   /* readable accent on dark */
+  --darkroom:      oklch(0.148 0.01 285);
+  --paper-on-dark: oklch(0.94 0.003 250);
+  --muted-on-dark: oklch(0.73 0.01 270);
+
+  /* type */
+  --hand: "Kalam", "Bradley Hand", "Segoe Print", cursive;
+  --type: "Special Elite", "American Typewriter", "Courier New", monospace;
+
+  /* motion */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-expo:  cubic-bezier(0.16, 1, 0.3, 1);
+  --t-fast: 150ms;
+  --t-med:  260ms;
+  --t-slow: 480ms;
+
+  /* space */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+
+  /* surfaces that must flip with the day/night egg */
+  --btn-shadow: oklch(0.25 0.012 270 / 0.85);
+  --kbd-bg: oklch(1 0 0 / 0.55);
+  --star: oklch(0.9 0.03 250);
+
+  /* z scale (dialogs live in the top layer; this is for in-page chrome) */
+  --z-hud: 10;
+}
+
+/* ---------- night: the sun doodle is the switch ---------- */
+body.night {
+  --paper:      oklch(0.225 0.018 265);
+  --paper-warm: oklch(0.26 0.02 265);
+  --ink:        oklch(0.93 0.006 250);
+  --ink-muted:  oklch(0.72 0.011 258);
+  --pencil:     oklch(0.5 0.014 262);
+  --crimson:    oklch(0.68 0.155 30);
+  --btn-shadow: oklch(0.08 0.014 265 / 0.9);
+  --kbd-bg:     oklch(1 0 0 / 0.07);
+}
+body.night #grainRect { opacity: 0.5; }
+body.night .dot { opacity: 0.09; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--type);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+
+main { height: 100vh; height: 100dvh; }
+
+img { max-width: 100%; display: block; }
+
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+
+:focus-visible {
+  outline: 3px solid var(--crimson);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px;
+  clip-path: inset(50%); overflow: hidden; white-space: nowrap;
+}
+
+/* ---------- accessible nav / skip / noscript ---------- */
+
+.skip-link {
+  position: fixed; top: 10px; left: 10px; z-index: calc(var(--z-hud) + 1);
+  background: var(--ink); color: var(--paper);
+  font-family: var(--hand); font-size: 1rem;
+  padding: 10px 16px; border-radius: 10px;
+  transform: translateY(-64px);
+  transition: transform var(--t-fast) var(--ease-out-quint);
+}
+.skip-link:focus { transform: translateY(0); }
+
+.site-nav {
+  position: fixed; inset: auto auto 0 0; z-index: var(--z-hud);
+  transform: translateY(110%);
+}
+.site-nav:focus-within {
+  transform: none;
+  background: var(--paper);
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: 0 12px 0 0;
+  box-shadow: 0 -4px 24px oklch(0.25 0.012 270 / 0.22);
+}
+.site-nav ul { list-style: none; display: grid; gap: var(--sp-2); }
+.site-nav a { color: var(--ink); font-family: var(--hand); font-size: 1.05rem; }
+
+.noscript-note {
+  position: fixed; top: 0; left: 0; right: 0; z-index: var(--z-hud);
+  background: var(--paper); color: var(--ink);
+  padding: var(--sp-4) var(--sp-5); text-align: center;
+  border-bottom: 2px solid var(--ink);
+}
+
+/* ============================================================
+   HUD — written onto the map, not floating above it
+   ============================================================ */
+
+.hud > * { position: fixed; z-index: var(--z-hud); }
+
+.brand-chip {
+  top: max(18px, env(safe-area-inset-top));
+  left: max(20px, env(safe-area-inset-left));
+  font-family: var(--hand);
+  line-height: 1.05;
+  text-align: left;
+  padding: 4px 6px 6px 2px;
+  rotate: -1.2deg;
+  transition: rotate var(--t-med) var(--ease-out-quint);
+}
+.brand-chip strong {
+  display: block;
+  font-size: clamp(1.3rem, 1.1rem + 1vw, 1.7rem);
+  font-weight: 700;
+  color: var(--ink);
+}
+.brand-chip span {
+  display: block;
+  font-size: clamp(1rem, 0.9rem + 0.5vw, 1.15rem);
+  color: var(--crimson);
+  margin-top: 2px;
+}
+.brand-chip::after {
+  content: "";
+  display: block;
+  width: 62px; height: 4px;
+  margin-top: 5px;
+  background: var(--crimson);
+  border-radius: 999px 2px 999px 3px;
+  rotate: -0.8deg;
+  transition: width var(--t-med) var(--ease-out-quint);
+}
+.brand-chip:hover { rotate: 0.2deg; }
+.brand-chip:hover::after { width: 92px; }
+
+.hint-chip {
+  left: max(20px, env(safe-area-inset-left));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  color: var(--ink-muted);
+  font-family: var(--type); font-size: 0.85rem;
+  max-width: min(70vw, 430px);
+  transition: opacity var(--t-slow) ease, translate var(--t-slow) var(--ease-out-quint);
+}
+.hint-chip span { display: inline-block; white-space: nowrap; margin-right: 10px; }
+.hint-chip kbd {
+  font-family: inherit;
+  color: var(--ink);
+  border: 1.5px solid var(--pencil);
+  border-radius: 5px;
+  padding: 0 4px;
+  margin: 0 1px;
+  background: var(--kbd-bg);
+}
+.hint-chip.hidden { opacity: 0; translate: 0 10px; pointer-events: none; }
+
+/* the one real control on the map: drawn like a hand-inked button */
+.compass-chip {
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: flex; align-items: center; gap: 9px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--hand); font-weight: 700; font-size: 1.1rem;
+  padding: 9px 20px 10px 13px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 3px 3px 0 var(--btn-shadow);
+  transition: translate var(--t-fast) var(--ease-out-quint), box-shadow var(--t-fast) ease;
+}
+.compass-chip svg { width: 30px; height: 30px; }
+.compass-chip .needle { fill: var(--crimson); }
+/* points at whatever you haven't visited yet, then settles back to north */
+.needle-spin {
+  transform-box: fill-box; transform-origin: 50% 50%;
+  transition: rotate 700ms var(--ease-out-quint);
+}
+.compass-chip:hover { translate: -1px -1px; box-shadow: 5px 5px 0 var(--btn-shadow); }
+.compass-chip:active { translate: 2px 2px; box-shadow: 1px 1px 0 var(--btn-shadow); }
+.compass-chip:hover svg { animation: needle-wiggle 600ms var(--ease-out-quint); }
+@keyframes needle-wiggle {
+  0% { rotate: 0deg; } 30% { rotate: 14deg; } 65% { rotate: -8deg; } 100% { rotate: 0deg; }
+}
+
+/* ============================================================
+   THE MAP
+   ============================================================ */
+
+.stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--paper);
+}
+/* worn edges — suggests old paper without framing it as a page */
+.stage::after {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 clamp(70px, 14vw, 190px) oklch(0.25 0.012 270 / 0.06);
+}
+
+#world, #actors {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+#world {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#actors { pointer-events: none; }
+
+.paper-fill { fill: var(--paper); }
+.dot { fill: var(--ink); opacity: 0.05; }
+
+/* stars only exist after dark */
+#starsRect { display: none; }
+body.night #starsRect { display: block; }
+.star { fill: var(--star); opacity: 0.55; }
+
+/* the sun / moon toggle */
+.egg { cursor: pointer; }
+.egg-halo { fill: transparent; }
+.egg:focus-visible { outline: none; }
+.egg:focus-visible .egg-halo {
+  fill: none; stroke: var(--crimson); stroke-width: 2.5; stroke-dasharray: 2 9; stroke-linecap: round;
+}
+.egg:hover { opacity: 1; }
+.moon-only { display: none; }
+body.night .sun-only { display: none; }
+body.night .moon-only { display: block; }
+
+/* the campfire catches the dark */
+body.night .ember {
+  stroke: oklch(0.75 0.16 62);
+  filter: drop-shadow(0 0 5px oklch(0.7 0.17 55 / 0.75));
+}
+
+/* birds startle when you walk up on them, and actually flap away */
+.wing {
+  fill: none; stroke: currentColor;
+  stroke-width: 2.4; stroke-linecap: round;
+}
+.wl { transform-box: fill-box; transform-origin: 100% 100%; }
+.wr { transform-box: fill-box; transform-origin: 0 100%; }
+
+#decorBirds.scattered .wl { animation: flap-l 220ms ease-in-out infinite; }
+#decorBirds.scattered .wr { animation: flap-r 220ms ease-in-out infinite; }
+#decorBirds.scattered .b2 .wl,
+#decorBirds.scattered .b2 .wr { animation-delay: 70ms; }
+#decorBirds.scattered .b3 .wl,
+#decorBirds.scattered .b3 .wr { animation-delay: 130ms; }
+@keyframes flap-l {
+  0%, 100% { transform: rotate(17deg); }
+  50%      { transform: rotate(-21deg); }
+}
+@keyframes flap-r {
+  0%, 100% { transform: rotate(-17deg); }
+  50%      { transform: rotate(21deg); }
+}
+
+/* --fly-x / --fly-y are measured in JS so they always clear the viewport */
+#decorBirds.scattered { animation: fly-off 2200ms cubic-bezier(0.4, 0, 0.75, 0.5) forwards; }
+@keyframes fly-off {
+  0%   { translate: 0 0; }
+  14%  { translate: -4px -16px; }        /* the startled jump */
+  100% { translate: var(--fly-x, 500px) var(--fly-y, -700px); }
+}
+
+.pencil { color: var(--pencil); }
+
+.pencil-route {
+  fill: none;
+  stroke: var(--pencil);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-dasharray: 0.1 11;
+  opacity: 0.85;
+}
+
+/* Where you've walked, in your own colour and in real dashes — the route
+   between the landmarks is grey dots, and the two were reading as the same
+   line. */
+#trail {
+  fill: none;
+  stroke: var(--crimson);
+  stroke-width: 2.6;
+  stroke-linecap: butt;
+  stroke-dasharray: 9 7;
+  opacity: 0.42;
+}
+/* the same 0.42 against dark paper is barely there */
+body.night #trail { opacity: 0.62; }
+
+.ink-decor { color: var(--ink); opacity: 0.8; }
+.ink-decor .ink,
+#startNote path {
+  fill: none; stroke: currentColor;
+  stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+}
+.ink-decor .ink.thin { stroke-width: 2.2; }
+.crimson-fill { fill: var(--crimson); }
+
+/* paper-colored knockout so hand text stays legible over dots and route lines */
+.knock {
+  paint-order: stroke;
+  stroke: var(--paper);
+  stroke-width: 7;
+  stroke-linejoin: round;
+}
+
+.hand-sm  { font-family: var(--hand); font-size: 17px; fill: var(--ink); }
+.hand-sig { font-family: var(--hand); font-size: 22px; font-weight: 700; fill: var(--ink); opacity: 0.8; }
+.hand-note{ font-family: var(--hand); font-size: 19px; fill: var(--crimson); }
+
+#startNote { color: var(--crimson); transition: opacity 700ms ease; }
+#startNote path { stroke-width: 2.6; }
+#startNote.gone { opacity: 0; }
+
+/* the little × where you clicked */
+#clickMark { opacity: 0; transform-box: fill-box; transform-origin: center; }
+#clickMark path { fill: none; stroke: var(--crimson); stroke-width: 3; stroke-linecap: round; }
+#clickMark.ping { animation: ping 560ms var(--ease-out-quint); }
+@keyframes ping {
+  0%   { opacity: 0.95; scale: 0.5; }
+  60%  { opacity: 0.85; scale: 1.06; }
+  100% { opacity: 0;    scale: 1; }
+}
+
+/* ---------- landmarks ---------- */
+
+.landmark { cursor: pointer; color: var(--ink); }
+.landmark .lm-halo { fill: transparent; }
+
+.landmark .ink {
+  fill: none; stroke: currentColor;
+  stroke-width: 4.4; stroke-linecap: round; stroke-linejoin: round;
+}
+.landmark .ink.thin { stroke-width: 3; }
+.landmark .ink.hairline { stroke-width: 1.9; fill: none; }
+.landmark .smoke { opacity: 0.55; }
+
+.landmark .lm-art { transition: translate var(--t-med) var(--ease-out-quint); }
+
+.landmark .lm-label {
+  font-family: var(--hand); font-weight: 700; font-size: 32px;
+  fill: var(--ink); text-anchor: middle;
+  transition: fill var(--t-fast) ease;
+}
+
+.landmark .lm-underline {
+  fill: none; stroke: var(--crimson); stroke-width: 3.4; stroke-linecap: round;
+  stroke-dasharray: 150; stroke-dashoffset: 150;
+  transition: stroke-dashoffset 360ms var(--ease-out-quint);
+}
+
+.landmark:hover .lm-art,
+.landmark:focus-visible .lm-art,
+.landmark.in-range .lm-art { translate: 0 -5px; }
+
+.landmark:hover .lm-label,
+.landmark:focus-visible .lm-label,
+.landmark.in-range .lm-label { fill: var(--crimson); }
+
+.landmark:hover .lm-underline,
+.landmark:focus-visible .lm-underline,
+.landmark.in-range .lm-underline { stroke-dashoffset: 0; }
+
+.landmark:focus-visible { outline: none; }
+.landmark:focus-visible .lm-halo {
+  fill: none; stroke: var(--crimson); stroke-width: 3; stroke-dasharray: 2 10; stroke-linecap: round;
+}
+
+.enter-tip {
+  opacity: 0; scale: 0.7;
+  transform-box: fill-box; transform-origin: center;
+  transition: opacity var(--t-fast) ease, scale var(--t-med) var(--ease-out-quint);
+  pointer-events: none;
+}
+.enter-tip rect { fill: var(--ink); }
+.enter-tip text { font-family: var(--hand); font-weight: 700; font-size: 17px; fill: var(--paper); text-anchor: middle; }
+.landmark.in-range .enter-tip { opacity: 1; scale: 1; }
+/* just-closed landmark: the prompt goes quiet until you step away */
+.landmark.suppressed .enter-tip { opacity: 0; scale: 0.7; }
+
+/* visited stamps */
+.stamp { opacity: 0; scale: 0.3; rotate: 14deg; transform-box: fill-box; transform-origin: center; color: var(--crimson); }
+.stamp circle { fill: var(--paper); stroke: currentColor; stroke-width: 2.6; stroke-dasharray: 4 5; }
+.stamp text { font-family: var(--type); font-size: 13px; fill: currentColor; text-anchor: middle; text-transform: uppercase; letter-spacing: 0.08em; }
+.stamp.stamped { opacity: 0.85; scale: 1; rotate: 0deg; transition: opacity var(--t-med) ease, scale 340ms var(--ease-out-quint), rotate 340ms var(--ease-out-quint); }
+
+/* ---------- hiker ---------- */
+
+#hiker { pointer-events: none; }
+.hiker-shadow { fill: var(--ink); opacity: 0.14; }
+.hiker-line, .leg path {
+  fill: none; stroke: var(--ink); stroke-width: 2.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.hiker-line.thin { stroke-width: 2; }
+.hiker-head { fill: var(--paper); stroke: var(--ink); stroke-width: 2.7; }
+.hiker-pack { fill: var(--crimson); stroke: var(--ink); stroke-width: 2; }
+
+/* legs rotate from the hip: fill-box corners land exactly on (0,-17) */
+.leg { transform-box: fill-box; }
+.leg-l { transform-origin: 100% 0; }
+.leg-r { transform-origin: 0 0; }
+#hiker.walking .leg-l { animation: stride 360ms ease-in-out infinite; }
+#hiker.walking .leg-r { animation: stride 360ms ease-in-out infinite reverse; }
+@keyframes stride {
+  0%, 100% { transform: rotate(24deg); }
+  50%      { transform: rotate(-24deg); }
+}
+#hiker.walking #hikerInner { animation: jog 360ms ease-in-out infinite; }
+@keyframes jog {
+  0%, 100% { translate: 0 0; }
+  25%      { translate: 0 -1.6px; }
+  75%      { translate: 0 -1.6px; }
+}
+
+/* ---------- the dog ---------- */
+
+#dog { pointer-events: auto; cursor: pointer; }
+.dog-hit { fill: transparent; }        /* generous tap target around a small drawing */
+.dog-shadow { fill: var(--ink); opacity: 0.12; }
+
+/* paper fill keeps the far legs hidden where the body overlaps them */
+.dog-body {
+  fill: var(--paper); stroke: var(--ink);
+  stroke-width: 1.9; stroke-linejoin: round;
+}
+.dog-mantle { fill: var(--ink); }
+.dog-tail-shape { fill: var(--ink); }
+.dog-eye { fill: var(--ink); }
+.dog-collar { fill: none; stroke: var(--crimson); stroke-width: 1.8; stroke-linecap: round; }
+.dog-leg path { fill: none; stroke: var(--ink); stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+.dog-leg-ff path, .dog-leg-bf path { opacity: 0.45; }   /* far side sits back */
+
+#dog:focus-visible { outline: none; }
+#dog:focus-visible .dog-hit {
+  fill: none; stroke: var(--crimson); stroke-width: 2.5; stroke-dasharray: 2 8; stroke-linecap: round;
+}
+
+/* every moving part pivots from its top-right point, which is where each
+   path starts — hip, shoulder, tail base */
+.dog-leg, .dog-tail { transform-box: fill-box; transform-origin: 100% 0; }
+
+/* diagonal trot: near-front swings with far-back */
+#dog.walking .dog-leg-fn, #dog.walking .dog-leg-bf { animation: dog-stride 300ms ease-in-out infinite; }
+#dog.walking .dog-leg-ff, #dog.walking .dog-leg-bn { animation: dog-stride 300ms ease-in-out infinite reverse; }
+@keyframes dog-stride {
+  0%, 100% { transform: rotate(21deg); }
+  50%      { transform: rotate(-21deg); }
+}
+#dog.walking.running .dog-leg-fn, #dog.walking.running .dog-leg-bf,
+#dog.walking.running .dog-leg-ff, #dog.walking.running .dog-leg-bn { animation-duration: 225ms; }
+#dog.walking.running #dogInner { animation-duration: 225ms; }
+
+#dog.walking #dogInner { animation: dog-bob 300ms ease-in-out infinite; }
+@keyframes dog-bob {
+  0%, 100% { translate: 0 0; }
+  50%      { translate: 0 -1.1px; }
+}
+
+.dog-tail { transform: rotate(0deg); }
+#dog.walking .dog-tail { animation: tail-sway 600ms ease-in-out infinite; }
+@keyframes tail-sway {
+  0%, 100% { transform: rotate(-9deg); }
+  50%      { transform: rotate(9deg); }
+}
+#dog.idle .dog-tail { animation: tail-wag 460ms ease-in-out infinite; }
+@keyframes tail-wag {
+  0%, 100% { transform: rotate(-16deg); }
+  50%      { transform: rotate(20deg); }
+}
+/* petted: the whole point of having a dog */
+#dog.happy .dog-tail { animation: tail-wag 150ms ease-in-out infinite; }
+#dog.happy #dogInner { animation: dog-hop 400ms var(--ease-out-quint) 2; }
+@keyframes dog-hop {
+  0%, 100% { translate: 0 0; }
+  35%      { translate: 0 -4px; }
+}
+
+#dogSpeak { opacity: 0; pointer-events: none; }
+#dogSpeak.say { animation: say-pop 1400ms var(--ease-out-quint); }
+.dog-say { font-family: var(--hand); font-weight: 700; font-size: 17px; fill: var(--crimson); }
+@keyframes say-pop {
+  0%   { opacity: 0; translate: 0 4px;   scale: 0.6; }
+  18%  { opacity: 1; translate: 0 -6px;  scale: 1; }
+  70%  { opacity: 1; translate: 0 -12px; }
+  100% { opacity: 0; translate: 0 -20px; }
+}
+
+/* ---------- fetch ---------- */
+
+#stickWrap { display: none; }
+#stickWrap.live { display: block; }
+#stickShadow { fill: var(--ink); opacity: 0.13; }
+.stick-art {
+  fill: none; stroke: var(--ink);
+  stroke-width: 2.4; stroke-linecap: round;
+}
+
+.arm-r { transform-box: fill-box; transform-origin: 0 0; }
+#hiker.throwing .arm-r { animation: throw-arm 560ms var(--ease-out-quint); }
+@keyframes throw-arm {
+  0%   { transform: rotate(0deg); }
+  28%  { transform: rotate(-74deg); }
+  52%  { transform: rotate(38deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* ---------- making camp (15s idle) ---------- */
+
+#hikerSit, #dogCurl, #zzz { display: none; }
+body.camping #hikerWalk, body.camping #dogWalk { display: none; }
+body.camping #hikerSit, body.camping #dogCurl, body.camping #zzz { display: block; }
+
+.dog-stroke {
+  fill: none; stroke: var(--ink);
+  stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round;
+}
+.dog-eye-shut {
+  fill: none; stroke: var(--ink); stroke-width: 1.4;
+  stroke-dasharray: 2.4 20; stroke-dashoffset: 1.2;   /* a closed, contented eye */
+}
+
+.z {
+  font-family: var(--hand); font-weight: 700; font-size: 11px;
+  fill: var(--ink-muted);
+}
+.z1 { animation: drift 3s ease-in-out infinite; }
+.z2 { animation: drift 3s ease-in-out 0.55s infinite; }
+.z3 { animation: drift 3s ease-in-out 1.1s infinite; }
+@keyframes drift {
+  0%   { opacity: 0;   translate: 0 3px;   scale: 0.8; }
+  30%  { opacity: 0.9; }
+  100% { opacity: 0;   translate: 5px -12px; scale: 1.15; }
+}
+
+/* ---------- field trip complete ---------- */
+
+.done-stamp {
+  position: fixed; inset: 0;
+  display: grid; place-items: center;
+  pointer-events: none;
+  z-index: calc(var(--z-hud) + 2);
+  color: var(--crimson);
+  opacity: 0;
+  visibility: hidden;
+}
+.done-stamp svg { width: min(46vw, 300px); height: auto; }
+.done-stamp text {
+  font-family: var(--type); font-size: 27px; letter-spacing: 0.04em;
+  fill: currentColor;
+}
+.done-stamp .ds-sub { font-family: var(--hand); font-size: 22px; letter-spacing: 0; opacity: 0.85; }
+.done-stamp.thump {
+  visibility: visible;
+  animation: stamp-thump 2900ms var(--ease-out-quint) forwards;
+}
+@keyframes stamp-thump {
+  0%   { opacity: 0; scale: 2.4; rotate: -16deg; }
+  12%  { opacity: 0.92; scale: 1; rotate: -7deg; }
+  16%  { scale: 1.05; }
+  22%  { scale: 1; }
+  78%  { opacity: 0.92; scale: 1; rotate: -7deg; }
+  100% { opacity: 0; scale: 1.06; rotate: -7deg; }
+}
+
+/* ---------- entrance ---------- */
+
+.stage { opacity: 0; scale: 0.992; transition: opacity 620ms ease, scale 700ms var(--ease-out-quint); }
+body.loaded .stage { opacity: 1; scale: 1; }
+
+#hikerInner { scale: 0; transform-box: fill-box; transform-origin: 50% 100%; transition: scale 380ms var(--ease-out-quint) 300ms; }
+body.loaded #hikerInner { scale: 1; }
+
+#dogInner { scale: 0; transform-box: fill-box; transform-origin: 50% 100%; transition: scale 380ms var(--ease-out-quint) 430ms; }
+body.loaded #dogInner { scale: 1; }   /* trots in just after the hiker */
+
+.hud > * { opacity: 0; translate: 0 10px; }
+body.loaded .hud > * { opacity: 1; translate: 0 0; }
+body.loaded .brand-chip   { transition: opacity var(--t-slow) ease 250ms, translate var(--t-slow) var(--ease-out-quint) 250ms, rotate var(--t-med) var(--ease-out-quint); }
+body.loaded .hint-chip    { transition: opacity var(--t-slow) ease 420ms, translate var(--t-slow) var(--ease-out-quint) 420ms; }
+body.loaded .compass-chip { transition: opacity var(--t-slow) ease 560ms, translate var(--t-slow) var(--ease-out-quint) 560ms, box-shadow var(--t-fast) ease; }
+body.loaded .hint-chip.hidden {
+  opacity: 0; translate: 0 10px;
+  transition: opacity var(--t-slow) ease, translate var(--t-slow) var(--ease-out-quint);
+}
+
+/* ============================================================
+   OVERLAY PAGES (dialogs)
+   ============================================================ */
+
+dialog { border: none; padding: 0; color: var(--ink); }
+dialog::backdrop { background: oklch(0.16 0.01 285 / 0.5); backdrop-filter: blur(3px); }
+
+.page-dlg[open] { animation: dlg-in var(--t-med) var(--ease-out-quint); }
+@keyframes dlg-in {
+  from { opacity: 0; transform: scale(0.965) rotate(-0.6deg); }
+  to   { opacity: 1; transform: none; }
+}
+
+.dlg-close {
+  position: absolute;
+  top: 14px; right: 14px;
+  width: 46px; height: 46px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  color: inherit;
+  transition: rotate var(--t-med) var(--ease-out-quint), background var(--t-fast) ease;
+  z-index: 2;
+}
+.dlg-close svg { width: 24px; height: 24px; }
+.dlg-close svg path { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.dlg-close:hover { rotate: 90deg; background: oklch(0.5 0.01 270 / 0.14); }
+
+/* ---- paper sheets (about / contact / contents) ---- */
+
+.paper-dlg {
+  background: transparent;
+  max-width: none; max-height: none;
+  width: 100vw; height: 100dvh;
+  display: grid;
+  overflow: auto;
+  padding: clamp(12px, 4vw, 40px);
+}
+.paper-dlg:not([open]) { display: none; }
+
+.sheet {
+  margin: auto;   /* centers, but stays scrollable when taller than the screen */
+  position: relative;
+  background:
+    radial-gradient(oklch(0.25 0.012 270 / 0.05) 1.1px, transparent 1.2px) 0 0 / 26px 26px,
+    var(--paper);
+  border-radius: 14px 10px 16px 9px / 10px 15px 9px 14px;
+  box-shadow: 0 24px 70px oklch(0 0 0 / 0.45);
+  rotate: -0.5deg;
+  width: min(660px, 94vw);
+  padding: clamp(28px, 6vw, 56px);
+}
+
+.sheet h2 {
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(1.9rem, 5vw, 2.5rem);
+  line-height: 1.15;
+  margin-bottom: var(--sp-5);
+  text-wrap: balance;
+}
+.sheet h2::after {
+  content: "";
+  display: block;
+  width: 96px; height: 5px;
+  margin-top: 6px;
+  background: var(--crimson);
+  border-radius: 999px 3px 999px 4px;
+  rotate: -1deg;
+}
+
+.sheet p { max-width: 58ch; margin-bottom: var(--sp-4); }
+.sheet .sig { font-family: var(--hand); font-weight: 700; font-size: 1.5rem; color: var(--crimson); rotate: -2deg; width: max-content; margin-top: var(--sp-5); }
+
+.scribble { list-style: none; margin: var(--sp-5) 0; display: grid; gap: var(--sp-2); }
+.scribble li { padding-left: 28px; position: relative; }
+.scribble li::before {
+  content: "—"; position: absolute; left: 0;
+  color: var(--crimson); font-family: var(--hand); font-weight: 700;
+}
+
+.polaroid {
+  float: right;
+  width: min(215px, 42%);
+  margin: 4px 0 var(--sp-4) var(--sp-5);
+  background: white;
+  padding: 9px 9px 30px;
+  box-shadow: 0 8px 22px oklch(0 0 0 / 0.25);
+  rotate: 2.2deg;
+  transition: rotate var(--t-med) var(--ease-out-quint), scale var(--t-med) var(--ease-out-quint);
+}
+.polaroid:hover { rotate: 0.6deg; scale: 1.02; }
+.polaroid img { aspect-ratio: 1 / 1; object-fit: cover; }
+.polaroid figcaption { font-family: var(--hand); text-align: center; font-size: 0.95rem; margin-top: 7px; color: var(--ink-muted); }
+
+/* ---- postcard (contact) ---- */
+
+.postcard { display: grid; grid-template-columns: 1.15fr 1fr; gap: clamp(20px, 4vw, 40px); width: min(820px, 94vw); }
+.pc-write > p { margin-bottom: var(--sp-4); }
+
+.btn-mail {
+  display: inline-block;
+  background: var(--crimson);
+  color: var(--paper);
+  font-family: var(--hand); font-weight: 700; font-size: 1.15rem;
+  text-decoration: none;
+  padding: 12px 26px 14px;
+  border-radius: 6px 16px 7px 14px / 14px 7px 16px 6px;
+  box-shadow: 0 4px 0 var(--crimson-deep);
+  transition: translate var(--t-fast) var(--ease-out-quint), box-shadow var(--t-fast) ease;
+}
+.btn-mail:hover { translate: 0 -2px; box-shadow: 0 6px 0 var(--crimson-deep); }
+.btn-mail:active { translate: 0 2px; box-shadow: 0 2px 0 var(--crimson-deep); }
+
+/* ---- contact form ---- */
+
+#contactForm .field { margin-bottom: var(--sp-3); }
+#contactForm label {
+  display: block;
+  font-family: var(--hand); font-size: 1.05rem;
+  color: var(--ink-muted);
+  margin-bottom: 3px;
+}
+#contactForm input,
+#contactForm textarea {
+  width: 100%;
+  font: inherit; font-size: 0.95rem;
+  color: var(--ink);
+  background: oklch(1 0 0 / 0.5);
+  border: none;
+  border-bottom: 2px solid var(--pencil);
+  border-radius: 2px 2px 0 0;
+  padding: 7px 9px;
+  transition: border-color var(--t-fast) ease, background var(--t-fast) ease;
+}
+body.night #contactForm input,
+body.night #contactForm textarea { background: oklch(1 0 0 / 0.07); }
+#contactForm textarea { resize: vertical; min-height: 84px; }
+#contactForm input:focus,
+#contactForm textarea:focus {
+  outline: none;
+  border-bottom-color: var(--crimson);
+  background: oklch(1 0 0 / 0.75);
+}
+body.night #contactForm input:focus,
+body.night #contactForm textarea:focus { background: oklch(1 0 0 / 0.12); }
+#contactForm .btn-mail { margin-top: var(--sp-2); border: none; cursor: pointer; }
+#contactForm .btn-mail:disabled { opacity: 0.6; cursor: progress; }
+
+.form-status { font-size: 0.9rem; margin-top: var(--sp-3); min-height: 1.2em; color: var(--ink-muted); }
+.form-status.good { color: var(--crimson); font-family: var(--hand); font-size: 1.05rem; }
+.form-status.bad  { color: var(--crimson); }
+
+/* ---- email reveal ---- */
+
+.reveal { margin-top: auto; }
+.btn-reveal {
+  font-family: var(--hand); font-weight: 700; font-size: 1.05rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 7px 18px;
+  box-shadow: 2px 2px 0 var(--btn-shadow);
+  transition: translate var(--t-fast) var(--ease-out-quint), box-shadow var(--t-fast) ease;
+}
+.btn-reveal:hover { translate: -1px -1px; box-shadow: 4px 4px 0 var(--btn-shadow); }
+.btn-reveal:active { translate: 1px 1px; box-shadow: 1px 1px 0 var(--btn-shadow); }
+
+.captcha label { display: block; font-size: 0.85rem; color: var(--ink-muted); margin-bottom: 5px; }
+.captcha-row { display: flex; gap: 7px; align-items: center; }
+.captcha-row input {
+  font: inherit; font-size: 0.95rem; width: 4.5em;
+  color: var(--ink);
+  background: oklch(1 0 0 / 0.5);
+  border: none; border-bottom: 2px solid var(--pencil);
+  padding: 5px 7px;
+}
+body.night .captcha-row input { background: oklch(1 0 0 / 0.07); }
+.captcha-row input:focus { outline: none; border-bottom-color: var(--crimson); }
+.captcha-row button {
+  font-family: var(--hand); font-weight: 700;
+  color: var(--paper); background: var(--ink);
+  border-radius: 999px; padding: 5px 14px;
+}
+.captcha-error { color: var(--crimson); font-size: 0.85rem; margin-top: 5px; }
+.revealed a {
+  font-family: var(--hand); font-weight: 700; font-size: 1.1rem;
+  color: var(--crimson);
+  word-break: break-all;
+}
+
+.pc-side {
+  border-left: 2px dashed var(--pencil);
+  padding-left: clamp(20px, 3vw, 34px);
+  display: flex; flex-direction: column; gap: var(--sp-6);
+}
+.pc-stamp { color: var(--crimson); width: 74px; align-self: flex-end; rotate: 3deg; }
+.addr { display: grid; gap: 14px; font-family: var(--hand); font-size: 1.1rem; color: var(--ink-muted); rotate: -0.6deg; }
+.addr span { border-bottom: 2px solid var(--pencil); padding-bottom: 4px; }
+.addr .addr-name { color: var(--ink); font-weight: 700; }
+
+/* ---- contents (fast travel) ---- */
+
+.contents-dlg .sheet { width: min(560px, 94vw); }
+
+#contentsList { list-style: none; display: grid; gap: 6px; margin: var(--sp-4) 0 var(--sp-5); }
+#contentsList button {
+  display: flex; align-items: baseline; gap: 12px;
+  width: 100%;
+  padding: 12px 8px;
+  border-radius: 8px;
+  text-align: left;
+  transition: translate var(--t-fast) var(--ease-out-quint), background var(--t-fast) ease;
+}
+#contentsList button:hover { translate: 6px 0; background: oklch(0.5 0.01 270 / 0.08); }
+#contentsList .c-name { font-family: var(--hand); font-weight: 700; font-size: 1.35rem; transition: color var(--t-fast) ease; }
+#contentsList button:hover .c-name { color: var(--crimson); }
+#contentsList .c-count { color: var(--ink-muted); font-size: 0.8rem; white-space: nowrap; }
+#contentsList .c-leader { flex: 1; border-bottom: 2.5px dotted var(--pencil); translate: 0 -6px; min-width: 24px; }
+#contentsList .c-seen {
+  font-family: var(--type); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--crimson);
+  border: 1.5px dashed var(--crimson);
+  border-radius: 999px;
+  padding: 2px 9px;
+  rotate: -4deg;
+  white-space: nowrap;
+}
+.contents-note { color: var(--ink-muted); font-size: 0.95rem; }
+.contents-tip { margin-top: var(--sp-3); }
+.colophon {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--pencil);
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+}
+.contents-tip kbd {
+  font-family: var(--type); color: var(--ink);
+  border: 1.5px solid var(--pencil); border-radius: 5px;
+  padding: 1px 6px; margin: 0 2px;
+}
+
+/* ============================================================
+   GALLERIES (the darkroom)
+   ============================================================ */
+
+.gallery-dlg {
+  background: var(--darkroom);
+  color: var(--paper-on-dark);
+  width: 100vw; height: 100dvh;
+  max-width: none; max-height: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.gallery-dlg:not([open]) { display: none; }
+
+.gallery-dlg .dlg-close {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  background: oklch(0.3 0.01 285 / 0.55);
+}
+.gallery-dlg .dlg-close:hover { background: oklch(0.36 0.012 285 / 0.75); rotate: 90deg; }
+
+.dlg-head {
+  padding: clamp(22px, 5vw, 52px) clamp(18px, 4vw, 48px) clamp(14px, 2.5vw, 26px);
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-4);
+}
+.dlg-title {
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(2rem, 5.5vw, 3rem);
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+}
+.dlg-title::after {
+  content: "";
+  display: block;
+  width: 110px; height: 5px;
+  margin-top: 8px;
+  background: var(--crimson-lift);
+  border-radius: 999px 3px 999px 4px;
+  rotate: -1deg;
+}
+.dlg-sub { color: var(--muted-on-dark); font-size: 0.95rem; max-width: 52ch; margin-top: 10px; }
+
+/* The old site's mosaic. Bootstrap set only the tile WIDTH (3 columns,
+   then 2/1 as the screen narrows); Isotope did the layout: each tile drops
+   into the currently-shortest column, flush under its neighbour, 24px gutters.
+   Here the columns are real elements — .gal-col stacks that game.js fills
+   with the same shortest-column rule — so every edge packs tight and a
+   portrait photo just makes its own column run ahead. */
+.gal-grid {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 0 clamp(18px, 4vw, 48px) clamp(40px, 7vw, 80px);
+}
+.gal-col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* the way to The Whole Lot, sitting under each gallery like the old site's
+   "Gallery" button under its home grid */
+.gal-more {
+  display: flex;
+  justify-content: center;
+  padding: 0 18px clamp(48px, 8vw, 96px);
+}
+.gal-more-btn {
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: var(--paper-on-dark);
+  background: transparent;
+  border: 2px solid currentColor;
+  border-radius: 999px 8px 999px 10px;
+  padding: 13px 34px;
+  min-width: min(340px, 74vw);
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity var(--t-med) ease, background-color var(--t-med) ease;
+}
+.gal-more-btn:hover, .gal-more-btn:focus-visible {
+  opacity: 1;
+  background: oklch(1 0 0 / 0.06);
+}
+
+.ph {
+  position: relative;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: oklch(0.22 0.01 285);   /* placeholder card while the jpeg streams in */
+
+  /* the reveal, carried over from the old site verbatim: each tile rises 40px
+     and fades in over 0.7s, and buildGallery() spaces them 80ms apart */
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.7s cubic-bezier(.4, 0, .2, 1),
+              transform 0.7s cubic-bezier(.4, 0, .2, 1);
+}
+.ph.visible { opacity: 1; transform: translateY(0); }
+
+.ph img {
+  display: block;
+  width: 100%;
+  height: auto;
+  transition: scale 600ms var(--ease-out-quint);
+}
+
+.ph:hover img, .ph:focus-visible img { scale: 1.035; }
+.ph figcaption {
+  position: absolute; inset: auto 0 0 0;
+  padding: 34px 14px 12px;
+  background: linear-gradient(transparent, oklch(0.1 0.01 285 / 0.75));
+  color: var(--paper-on-dark);
+  font-size: 0.85rem;
+  text-align: left;
+  opacity: 0;
+  translate: 0 6px;
+  transition: opacity var(--t-med) ease, translate var(--t-med) var(--ease-out-quint);
+  pointer-events: none;
+}
+.ph:hover figcaption, .ph:focus-visible figcaption { opacity: 1; translate: 0 0; }
+.ph:focus-visible { outline-offset: -3px; }
+
+@media (hover: none) {
+  .ph figcaption { display: none; } /* captions live in the lightbox on touch */
+}
+
+/* ---------- lightbox ---------- */
+
+.lightbox {
+  background: oklch(0.11 0.008 285 / 0.985);
+  color: var(--paper-on-dark);
+  width: 100vw; height: 100dvh;
+  max-width: none; max-height: none;
+  display: grid; place-items: center;
+  padding: clamp(14px, 3vw, 40px);
+}
+.lightbox:not([open]) { display: none; }
+.lightbox[open] { animation: dlg-in var(--t-med) var(--ease-out-quint); }
+
+.lightbox figure {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+  max-width: min(1500px, 100%);
+}
+.lightbox img {
+  max-width: 100%;
+  max-height: min(78vh, 78dvh);
+  width: auto; height: auto;
+  border-radius: 3px;
+  box-shadow: 0 30px 80px oklch(0 0 0 / 0.6);
+}
+.lightbox figcaption {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+  font-size: 0.95rem;
+}
+.lb-place { font-family: var(--hand); font-size: 1.1rem; color: var(--crimson-lift); }
+
+.lb-close { position: fixed; background: oklch(0.3 0.01 285 / 0.55); }
+.lb-close:hover { background: oklch(0.36 0.012 285 / 0.75); }
+
+.lb-nav {
+  position: fixed;
+  top: 50%; translate: 0 -50%;
+  width: 54px; height: 54px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: oklch(0.3 0.01 285 / 0.45);
+  transition: background var(--t-fast) ease, scale var(--t-fast) var(--ease-out-quint);
+}
+.lb-nav:hover { background: oklch(0.36 0.012 285 / 0.7); scale: 1.06; }
+.lb-nav svg { width: 26px; height: 26px; }
+.lb-nav svg path { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.lb-prev { left: max(14px, env(safe-area-inset-left)); }
+.lb-next { right: max(14px, env(safe-area-inset-right)); }
+
+.lb-count {
+  position: fixed;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  right: max(20px, env(safe-area-inset-right));
+  color: var(--muted-on-dark);
+  font-size: 0.9rem;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 720px) {
+  .hint-chip { font-size: 0.8rem; max-width: min(56vw, 300px); }
+  .compass-chip span { display: none; }
+  .compass-chip { padding: 11px; }
+
+  .lb-nav { display: none; }            /* swipe / tap zones take over */
+  .lightbox figure { justify-items: center; }
+  .lightbox figcaption { justify-content: center; text-align: center; }
+
+  .postcard { grid-template-columns: 1fr; }
+  .pc-side { border-left: none; border-top: 2px dashed var(--pencil); padding-left: 0; padding-top: var(--sp-5); flex-direction: row; align-items: center; justify-content: space-between; }
+  .pc-stamp { align-self: flex-start; }
+  .addr { font-size: 1rem; flex: 1; margin-right: var(--sp-5); }
+}
+
+@media (max-width: 480px) {
+  .polaroid { float: none; width: 70%; margin: 0 auto var(--sp-5); rotate: 1.6deg; }
+  #contentsList .c-count { display: none; }
+}
+
+@media (pointer: coarse) {
+  .dlg-close { width: 50px; height: 50px; }
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .stage { opacity: 1; scale: 1; }
+  #hikerInner, #dogInner { scale: 1; }
+  .hud > * { opacity: 1; translate: 0 0; }
+  #trail { display: none; }
+  /* the dog still answers a pet, just without the bouncing */
+  #dogSpeak.say { animation: none; opacity: 1; }
+  /* photos still shuffle, they just arrive all at once instead of cascading */
+  .ph { opacity: 1; transform: none; }
+}
+/* ============================================================
+   OFF THE MAP — the runner
+   ============================================================ */
+
+#runner {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-hud) + 5);
+  background: var(--paper);
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#runner[hidden] { display: none; }
+body.running-game { overflow: hidden; }
+
+#rkSvg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+#rkSky { fill: var(--paper); }
+
+/* ---------- the world ---------- */
+
+.rk-ink {
+  fill: none; stroke: var(--ink);
+  stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+}
+.rk-ink.rk-thick { stroke-width: 4.5; }
+.rk-ink.rk-thin  { stroke-width: 2.4; }
+.rk-ink.rk-hair  { stroke-width: 2; opacity: 0.65; }
+
+.rk-trail { fill: var(--ink); opacity: 0.032; stroke: none; }
+.rk-edge {
+  fill: none; stroke: var(--ink);
+  stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round;
+  opacity: 0.72;
+}
+.rk-lane {
+  fill: none; stroke: var(--pencil);
+  stroke-width: 2.2; stroke-linecap: round;
+  stroke-dasharray: 2 22;
+  opacity: 0.8;
+}
+.rk-horizon { fill: none; stroke: var(--ink); stroke-width: 2.4; opacity: 0.4; }
+.rk-far { fill: none; stroke: var(--pencil); stroke-width: 2.4; stroke-linejoin: round; opacity: 0.75; }
+.rk-far-back { opacity: 0.4; stroke-width: 2; }
+
+.rk-tree, .rk-ob { color: var(--ink); }
+
+/* ---------- the runners ---------- */
+
+.rk-pack { fill: var(--crimson); stroke: var(--ink); stroke-width: 3.5; }
+.rk-head { fill: var(--paper); stroke: var(--ink); stroke-width: 3.5; }
+.rk-dog-body { fill: var(--paper); stroke: var(--ink); stroke-width: 2.6; }
+.rk-dog-head { fill: var(--paper); stroke: var(--ink); stroke-width: 3; }
+.rk-dog-mantle { fill: var(--ink); }
+
+#rkHiker, #rkDog { transition: none; }
+
+/* legs and arms pump; --rk-cadence tightens as you speed up */
+.rk-leg, .rk-arm { transform-box: fill-box; transform-origin: 50% 0; }
+.rk-l1 { animation: rk-stride var(--rk-cadence, 320ms) ease-in-out infinite; }
+.rk-l2 { animation: rk-stride var(--rk-cadence, 320ms) ease-in-out infinite reverse; }
+.rk-a1 { animation: rk-swing var(--rk-cadence, 320ms) ease-in-out infinite reverse; }
+.rk-a2 { animation: rk-swing var(--rk-cadence, 320ms) ease-in-out infinite; }
+@keyframes rk-stride {
+  0%, 100% { transform: rotate(19deg); }
+  50%      { transform: rotate(-19deg); }
+}
+@keyframes rk-swing {
+  0%, 100% { transform: rotate(11deg); }
+  50%      { transform: rotate(-11deg); }
+}
+.rk-tail { transform-box: fill-box; transform-origin: 100% 100%; animation: rk-wag 260ms ease-in-out infinite; }
+@keyframes rk-wag {
+  0%, 100% { transform: rotate(-9deg); }
+  50%      { transform: rotate(9deg); }
+}
+
+/* sliding: squash down and tuck the legs */
+#rkHiker.rk-sliding { scale: 1 0.46; }
+#rkDog.rk-sliding   { scale: 1 0.62; }
+#rkHiker, #rkDog { transform-box: view-box; }
+
+.rk-crashed #rkHiker { rotate: -74deg; translate: -14px 26px; transition: rotate 380ms var(--ease-out-quint), translate 380ms var(--ease-out-quint); }
+.rk-crashed .rk-l1, .rk-crashed .rk-l2,
+.rk-crashed .rk-a1, .rk-crashed .rk-a2,
+.rk-crashed .rk-tail { animation-play-state: paused; }
+
+/* ---------- night falls ---------- */
+
+#runner.rk-night {
+  --paper:  oklch(0.225 0.018 265);
+  --ink:    oklch(0.93 0.006 250);
+  --pencil: oklch(0.5 0.014 262);
+  --crimson: oklch(0.68 0.155 30);
+}
+#runner { transition: background-color 2.4s ease; }
+#runner.rk-night #rkSky { transition: fill 2.4s ease; }
+
+/* ---------- hud ---------- */
+
+.rk-dist {
+  position: absolute;
+  top: max(18px, env(safe-area-inset-top));
+  left: max(20px, env(safe-area-inset-left));
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.2rem);
+  color: var(--ink);
+  pointer-events: none;
+}
+.rk-dist span { color: var(--crimson); }
+
+.rk-quit {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  font-family: var(--type); font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 5px 15px;
+  box-shadow: 2px 2px 0 var(--btn-shadow);
+}
+.rk-quit:hover { translate: -1px -1px; box-shadow: 3px 3px 0 var(--btn-shadow); }
+
+.rk-help {
+  position: absolute;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 50%; translate: -50% 0;
+  font-family: var(--type); font-size: 0.8rem;
+  color: var(--ink-muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
+@media (pointer: coarse) { .rk-help { font-size: 0.75rem; } }
+
+/* ---------- the stamp when you stop ---------- */
+
+.rk-over {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  background: oklch(0.16 0.01 285 / 0.42);
+  backdrop-filter: blur(2px);
+}
+.rk-over[hidden] { display: none; }
+
+.rk-stamp {
+  background: var(--paper);
+  border-radius: 14px 10px 16px 9px / 10px 15px 9px 14px;
+  box-shadow: 0 22px 60px oklch(0 0 0 / 0.42);
+  rotate: -1.2deg;
+  padding: clamp(24px, 5vw, 40px) clamp(28px, 6vw, 52px);
+  text-align: center;
+  animation: rk-thump 460ms var(--ease-out-quint);
+}
+@keyframes rk-thump {
+  0%   { opacity: 0; scale: 1.6; rotate: -9deg; }
+  60%  { opacity: 1; scale: 0.98; }
+  100% { opacity: 1; scale: 1; rotate: -1.2deg; }
+}
+.rk-over-dist {
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(2.4rem, 1.6rem + 4vw, 3.6rem);
+  line-height: 1;
+  color: var(--ink);
+}
+.rk-over-dist span { color: var(--crimson); }
+.rk-over-best {
+  font-family: var(--type); font-size: 0.9rem;
+  color: var(--ink-muted);
+  margin-top: 8px;
+}
+.rk-over-btns { display: flex; gap: 10px; justify-content: center; margin-top: var(--sp-5); flex-wrap: wrap; }
+.rk-over-btns button {
+  font-family: var(--hand); font-weight: 700; font-size: 1.05rem;
+  padding: 8px 20px;
+  border-radius: 999px;
+  border: 2px solid var(--ink);
+  background: var(--paper); color: var(--ink);
+  box-shadow: 2px 2px 0 var(--btn-shadow);
+}
+.rk-over-btns button:first-child { background: var(--crimson); color: var(--paper); border-color: var(--crimson); }
+.rk-over-btns button:hover { translate: -1px -1px; box-shadow: 4px 4px 0 var(--btn-shadow); }
+
+/* ---------- the way out ---------- */
+
+#edgeHint { opacity: 0; transition: opacity 220ms ease; pointer-events: none; }
+#edgeHint.on { opacity: 1; }
+#edgeHint text { font-family: var(--hand); font-weight: 700; font-size: 19px; fill: var(--crimson); }
+#edgeHint path { fill: none; stroke: var(--crimson); stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 3 8; }
+
+#signpost { cursor: pointer; }
+#signpost .sp-ink { fill: none; stroke: var(--ink); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+#signpost .sp-board { fill: var(--paper); stroke: var(--ink); stroke-width: 4; stroke-linejoin: round; }
+#signpost text { font-family: var(--hand); font-weight: 700; font-size: 17px; fill: var(--ink); text-anchor: middle; }
+#signpost:hover .sp-board { fill: var(--paper-warm); }
+#signpost:focus-visible { outline: none; }
+#signpost:focus-visible .sp-board { stroke: var(--crimson); }
+
+@media (prefers-reduced-motion: reduce) {
+  .rk-l1, .rk-l2, .rk-a1, .rk-a2, .rk-tail { animation: none; }
+  .rk-stamp { animation: none; }
+}
+
+/* ---------- runner prototype: signs + message ---------- */
+.rk-sign-board { fill: var(--paper); stroke: var(--ink); stroke-width: 4; stroke-linejoin: round; }
+.rk-sign-arrow { fill: none; stroke: var(--ink); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round;
+                 transform-box: fill-box; transform-origin: 50% 50%; }
+.rk-sign { color: var(--ink); }
+.rk-sign-live .rk-sign-board { stroke: var(--crimson); }
+.rk-sign-live .rk-sign-arrow { stroke: var(--crimson); }
+
+.rk-msg {
+  position: absolute; left: 50%; top: 44%; translate: -50% -50%;
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(1.6rem, 1.1rem + 2.4vw, 2.6rem);
+  color: var(--crimson);
+  pointer-events: none;
+}
+.rk-msg[hidden] { display: none; }
+
+/* ---------- runner: Felix is the one running ---------- */
+.rk-tail-thick { fill: none; stroke: var(--ink); stroke-width: 4; stroke-linecap: round; }
+.rk-collar { fill: none; stroke: var(--crimson); stroke-width: 3.4; stroke-linecap: round; }
+/* front pair swing opposite the back pair, so he reads as bounding */
+.rk-lf1 { animation: rk-stride var(--rk-cadence, 320ms) ease-in-out infinite; }
+.rk-lf2 { animation: rk-stride var(--rk-cadence, 320ms) ease-in-out infinite reverse; }
+.rk-lb1 { animation: rk-stride var(--rk-cadence, 320ms) ease-in-out infinite reverse; }
+.rk-lb2 { animation: rk-stride var(--rk-cadence, 320ms) ease-in-out infinite; }
+.rk-lf1, .rk-lf2, .rk-lb1, .rk-lb2 { transform-box: fill-box; transform-origin: 50% 0; }
+
+/* the back of Felix's head — dark like his back, ringed in paper so the
+   two dark masses don't merge into one blob */
+.rk-nape { fill: var(--ink); stroke: var(--paper); stroke-width: 2.6; stroke-linejoin: round; }
+
+/* ---------- runner: obstacles, ducking, the end of a run ---------- */
+
+#rkDog { transform-box: view-box; }
+
+.rk-over-why {
+  font-family: var(--type); font-size: 0.85rem;
+  color: var(--ink-muted); margin-bottom: 6px;
+}
+.rk-call {
+  margin-top: var(--sp-5);
+  font-family: var(--hand); font-weight: 700; font-size: 1.15rem;
+  background: var(--crimson); color: var(--paper);
+  border: none; border-radius: 999px;
+  padding: 10px 26px;
+  box-shadow: 0 4px 0 var(--crimson-deep);
+  transition: translate var(--t-fast) var(--ease-out-quint), box-shadow var(--t-fast) ease;
+}
+.rk-call:hover { translate: 0 -2px; box-shadow: 0 6px 0 var(--crimson-deep); }
+.rk-call:active { translate: 0 2px; box-shadow: 0 2px 0 var(--crimson-deep); }
+
+/* ---------- obstacles: a round-capped stroke reads as a trunk or a limb,
+     which a rectangle never did ---------- */
+
+/* ---------- the squirrel, and Felix coming home ---------- */
+.rk-sq-body { fill: var(--paper); stroke: var(--ink); stroke-width: 2.6; }
+.rk-sq-tail { fill: var(--ink); }
+.rk-sq-ear  { fill: var(--ink); }
+#rkSquirrel { animation: rk-scamper 190ms ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+@keyframes rk-scamper { 0%,100% { scale: 1 1; } 50% { scale: 1.06 0.93; } }
+
+.rk-muzzle { fill: var(--paper); stroke: var(--ink); stroke-width: 2.2; }
+.rk-eye { fill: var(--paper); }
+.rk-front-tail { transform-box: fill-box; transform-origin: 0% 100%;
+                 animation: rk-wag2 200ms ease-in-out infinite; }
+@keyframes rk-wag2 { 0%,100% { rotate: -14deg; } 50% { rotate: 14deg; } }
+
+/* ---------- shouts ---------- */
+.rk-shout {
+  position: absolute; left: 50%; top: 26%; translate: -50% 0;
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(1.4rem, 1rem + 2vw, 2.2rem);
+  color: var(--crimson); pointer-events: none;
+  animation: rk-shout-in 400ms var(--ease-out-quint);
+}
+.rk-shout[hidden] { display: none; }
+@keyframes rk-shout-in { from { opacity: 0; scale: 0.7; } to { opacity: 1; scale: 1; } }
+
+/* ---------- three seconds to go again ---------- */
+.rk-timer { margin-top: var(--sp-4); height: 3px; background: var(--pencil);
+            border-radius: 2px; overflow: hidden; opacity: 0.5; }
+.rk-timer i { display: block; height: 100%; width: 100%; background: var(--crimson); }
+@keyframes rk-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.rk-timer i { transform-origin: left center; }
+
+/* ---------- logs and branches ----------
+   A log needs its sawn ends showing; that reads as a felled trunk in a way
+   a plain bar never does. A branch needs to come off a tree at one side and
+   fork, rather than hang like a fringe. */
+.log-body  { fill: var(--paper); stroke: var(--ink); stroke-width: 3; stroke-linejoin: round; }
+.log-cap-l, .log-cap-r { fill: var(--paper); stroke: var(--ink); stroke-width: 3; }
+.log-ring-l, .log-ring-r { fill: none; stroke: var(--ink); stroke-width: 1.6; opacity: 0.7; }
+.log-grain { fill: none; stroke: var(--ink); stroke-linecap: round; opacity: 0.42; }
+
+.br-limb   { fill: var(--ink); }
+.br-twigs  { fill: none; stroke: var(--ink); stroke-linecap: round; }
+.br-leaves { fill: var(--ink); opacity: 0.85; }
+
+/* ---------- the squirrel on the map, and the seam into the trail ---------- */
+#mapSquirrel { animation: rk-scamper 150ms ease-in-out infinite;
+               transform-box: fill-box; transform-origin: 50% 100%; }
+
+.chase-fade {
+  position: fixed; inset: 0;
+  background: var(--paper);
+  opacity: 0; pointer-events: none;
+  z-index: calc(var(--z-hud) + 4);
+  transition: opacity 380ms ease;
+}
+.chase-fade.on { opacity: 1; }
+
+/* ---------- the control prompts, shown as each one is needed ---------- */
+.rk-tip {
+  position: absolute; left: 50%; bottom: 16%; translate: -50% 0;
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(1.05rem, 0.9rem + 1vw, 1.5rem);
+  color: var(--ink);
+  background: var(--paper);
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  padding: 7px 20px;
+  box-shadow: 3px 3px 0 var(--btn-shadow);
+  pointer-events: none; white-space: nowrap;
+  animation: rk-tip-in 320ms var(--ease-out-quint);
+}
+.rk-tip[hidden] { display: none; }
+@keyframes rk-tip-in { from { opacity: 0; translate: -50% 10px; } to { opacity: 1; translate: -50% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .chase-fade { transition: none; }
+  #mapSquirrel { animation: none; }
+}
+
+/* ---------- the squirrel ---------- */
+.sq-body, .rk-sq-body { fill: var(--paper); stroke: var(--ink); stroke-width: 2.4; stroke-linejoin: round; }
+.sq-tail, .rk-sq-tail { fill: var(--ink); }
+.sq-ear,  .rk-sq-ear  { fill: var(--ink); }
+.sq-eye,  .rk-sq-eye  { fill: var(--ink); }
+.sq-leg { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
+#mapSquirrel .sq-flip { transform: scaleX(var(--sq-flip, 1)); transform-box: fill-box; transform-origin: 50% 50%; }
+
+/* ---------- the way in, for anyone using a mouse ---------- */
+.trail-prompt {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  z-index: calc(var(--z-hud) + 3);
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(1rem, 0.9rem + 0.5vw, 1.2rem);
+  color: var(--paper); background: var(--crimson);
+  border: none; border-radius: 999px;
+  padding: 9px 20px 10px;
+  box-shadow: 0 4px 0 var(--crimson-deep);
+  white-space: nowrap; cursor: pointer;
+  opacity: 0; scale: 0.8;
+  transition: opacity 200ms ease, scale 240ms var(--ease-out-quint), translate 150ms var(--ease-out-quint);
+}
+.trail-prompt.on { opacity: 1; scale: 1; }
+.trail-prompt[hidden] { display: none; }
+.trail-prompt:hover { translate: 0 -2px; box-shadow: 0 6px 0 var(--crimson-deep); }
+.trail-prompt:active { translate: 0 2px; box-shadow: 0 2px 0 var(--crimson-deep); }
+
+/* ---------- Felix in the run ---------- */
+.rk-tail-fill { fill: var(--ink); }
+.rk-nose { fill: var(--ink); stroke: var(--paper); stroke-width: 1.6; }
