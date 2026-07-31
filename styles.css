@@ -68,6 +68,9 @@ body {
   overflow: hidden;
   height: 100vh;
   height: 100dvh;
+  /* the page never scrolls, so give the browser no reason to rubber-band
+     or pull-to-refresh — a down-swipe in the runner is a sploot, not a reload */
+  overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -161,6 +164,36 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 }
 .brand-chip:hover { rotate: 0.2deg; }
 .brand-chip:hover::after { width: 92px; }
+
+/* clicking the name on the bare map re-inks it: the whole chip shakes,
+   the tagline settles in fresh and the underline redraws itself with a
+   little overshoot — then it wears off (.fade) back to the real line */
+.brand-chip.reink { animation: brand-shake 0.5s ease; }
+.brand-chip.reink span { animation: brand-ink 0.55s ease both; }
+.brand-chip.reink::after { animation: brand-rule 0.6s var(--ease-out-quint); }
+
+.brand-chip span { transition: opacity 0.4s ease; }
+.brand-chip.fade span { opacity: 0; }
+
+@keyframes brand-shake {
+  0%   { translate: 0 0;      rotate: -1.2deg; }
+  18%  { translate: -2px 1px; rotate: 1.6deg; }
+  36%  { translate: 3px -1px; rotate: -2.4deg; }
+  54%  { translate: -2px 0;   rotate: 1.2deg; }
+  72%  { translate: 1px 1px;  rotate: -1.8deg; }
+  100% { translate: 0 0;      rotate: -1.2deg; }
+}
+
+@keyframes brand-ink {
+  0%   { opacity: 0; translate: 0 4px; }
+  35%  { opacity: 0; translate: 0 4px; }
+  100% { opacity: 1; translate: 0 0; }
+}
+@keyframes brand-rule {
+  0%   { width: 0;     rotate: -0.8deg; }
+  62%  { width: 98px;  rotate: 0.9deg; }
+  100% { width: 62px;  rotate: -0.8deg; }
+}
 
 .hint-chip {
   left: max(20px, env(safe-area-inset-left));
@@ -1113,8 +1146,10 @@ body.night .captcha-row input { background: oklch(1 0 0 / 0.07); }
   background: var(--paper);
   overflow: hidden;
   touch-action: none;
+  overscroll-behavior: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 #runner[hidden] { display: none; }
 body.running-game { overflow: hidden; }
@@ -1215,6 +1250,22 @@ body.running-game { overflow: hidden; }
 }
 .rk-dist span { color: var(--crimson); }
 
+/* The mark to beat, kept under the live distance for the whole run. Muted so
+   it reads as a reference rather than as your score, and it turns crimson the
+   moment you pass it — at which point it stops being a target and starts
+   being the news. */
+.rk-pb {
+  position: absolute;
+  top: calc(max(18px, env(safe-area-inset-top)) + 2.5rem);
+  left: max(20px, env(safe-area-inset-left));
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(0.95rem, 0.8rem + 0.7vw, 1.3rem);
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+.rk-pb[hidden] { display: none; }
+.rk-pb-hit { color: var(--crimson); }
+
 .rk-quit {
   position: absolute;
   top: max(16px, env(safe-area-inset-top));
@@ -1295,13 +1346,15 @@ body.running-game { overflow: hidden; }
 #edgeHint text { font-family: var(--hand); font-weight: 700; font-size: 19px; fill: var(--crimson); }
 #edgeHint path { fill: none; stroke: var(--crimson); stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 3 8; }
 
-#signpost { cursor: pointer; }
-#signpost .sp-ink { fill: none; stroke: var(--ink); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
-#signpost .sp-board { fill: var(--paper); stroke: var(--ink); stroke-width: 4; stroke-linejoin: round; }
-#signpost text { font-family: var(--hand); font-weight: 700; font-size: 17px; fill: var(--ink); text-anchor: middle; }
-#signpost:hover .sp-board { fill: var(--paper-warm); }
-#signpost:focus-visible { outline: none; }
-#signpost:focus-visible .sp-board { stroke: var(--crimson); }
+#signpost, #skiSign { cursor: pointer; }
+/* Lighter as well as smaller. These are a keepsake in the margin, not a
+   landmark — at landmark weight a half-size sign just reads as a heavy blot. */
+#signpost .sp-ink, #skiSign .sp-ink { fill: none; stroke: var(--ink); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+#signpost .sp-board, #skiSign .sp-board { fill: var(--paper); stroke: var(--ink); stroke-width: 2.6; stroke-linejoin: round; }
+#signpost text, #skiSign text { font-family: var(--hand); font-weight: 700; font-size: 12.5px; fill: var(--ink); text-anchor: middle; }
+#signpost:hover .sp-board, #skiSign:hover .sp-board { fill: var(--paper-warm); }
+#signpost:focus-visible, #skiSign:focus-visible { outline: none; }
+#signpost:focus-visible .sp-board, #skiSign:focus-visible .sp-board { stroke: var(--crimson); }
 
 @media (prefers-reduced-motion: reduce) {
   .rk-l1, .rk-l2, .rk-a1, .rk-a2, .rk-tail { animation: none; }
@@ -1472,3 +1525,402 @@ body.running-game { overflow: hidden; }
 /* ---------- Felix in the run ---------- */
 .rk-tail-fill { fill: var(--ink); }
 .rk-nose { fill: var(--ink); stroke: var(--paper); stroke-width: 1.6; }
+
+/* ============================================================
+   THE SKI RUN — off the left edge
+   Snow is unfilled paper: the slope is one ink line with nothing
+   beneath it, and depth comes from line weight rather than colour.
+   ============================================================ */
+
+#skirun {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-hud) + 5);
+  background: var(--paper);
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#skirun[hidden] { display: none; }
+#skSvg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#skSky { fill: var(--paper); }
+
+/* ---------- the mountain ---------- */
+
+.sk-ink {
+  fill: none; stroke: var(--ink);
+  stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+}
+.sk-ink.sk-thick { stroke-width: 4.5; }
+.sk-ink.sk-thin  { stroke-width: 2.4; }
+
+.sk-slope {
+  fill: none; stroke: var(--ink);
+  stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round;
+}
+/* the ranges behind: depth by weight, which is how a pencil does depth */
+.sk-ridge { fill: none; stroke: var(--pencil); stroke-linejoin: round; stroke-linecap: round; }
+.sk-ridge-1 { stroke-width: 2.6; opacity: 0.62; }
+.sk-ridge-2 { stroke-width: 2.2; opacity: 0.40; }
+.sk-ridge-3 { stroke-width: 1.8; opacity: 0.24; }
+
+.sk-tree { color: var(--ink); }
+.sk-rock { fill: var(--ink); stroke: var(--ink); stroke-width: 3; stroke-linejoin: round; }
+.sk-rock-face { fill: var(--paper); opacity: 0.30; stroke: none; }
+.sk-rock-shadow { fill: var(--ink); opacity: 0.16; }
+.sk-cable { fill: none; stroke: var(--ink); stroke-width: 2.4; opacity: 0.75; }
+/* ramp starts where the palette actually inverts, or they appear as dark
+   specks on white paper for the 700 m before nightfall */
+.sk-star { fill: var(--ink); opacity: calc(max(var(--sk-dusk, 0) - 0.55, 0) * 1.9); }
+
+/* ---------- the rider ---------- */
+
+.sk-ski { fill: none; stroke: var(--ink); stroke-width: 4; stroke-linecap: round; }
+.sk-pack { fill: var(--crimson); stroke: var(--ink); stroke-width: 3; }
+.sk-head { fill: var(--paper); stroke: var(--ink); stroke-width: 3.4; }
+.sk-pole { opacity: 0.9; }
+#skRider, #skRiderCrash, #skFelix { transition: none; }
+
+/* The ski chatter is gone: at 220ms it was adding its own sub-pixel jitter
+   on top of the camera's, and two small shakes read as one big one. */
+.sk-rider-in { transform-box: fill-box; transform-origin: 50% 100%; }
+
+/* ---------- Felix ---------- */
+
+.sk-f-body { fill: var(--paper); stroke: var(--ink); stroke-width: 2.4; stroke-linejoin: round; }
+.sk-f-mantle { fill: var(--ink); }
+.sk-f-fur { fill: var(--ink); }
+.sk-f-eye { fill: var(--paper); }
+.sk-f-leg path { fill: none; stroke: var(--ink); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+/* rotate about the shoulder, which is the top of each leg's own box */
+.sk-f-leg { transform-box: fill-box; transform-origin: 50% 0; }
+.sk-f-lf, .sk-f-lb2 { animation: sk-bound var(--sk-cadence, 260ms) ease-in-out infinite; }
+.sk-f-lb, .sk-f-lf2 { animation: sk-bound var(--sk-cadence, 260ms) ease-in-out infinite reverse; }
+@keyframes sk-bound {
+  0%, 100% { transform: rotate(24deg); }
+  50%      { transform: rotate(-24deg); }
+}
+.sk-f-tail { transform-box: fill-box; transform-origin: 100% 0; animation: sk-wag 300ms ease-in-out infinite; }
+@keyframes sk-wag {
+  0%, 100% { transform: rotate(-8deg); }
+  50%      { transform: rotate(8deg); }
+}
+
+/* ---------- night falls as you descend ---------- */
+
+#skirun.sk-night, #skirun.sk-night-start {
+  --paper:      oklch(0.225 0.018 265);
+  --ink:        oklch(0.93 0.006 250);
+  --ink-muted:  oklch(0.72 0.011 258);   /* without these the tip and the death */
+  --btn-shadow: oklch(0.14 0.01 265);    /* reason drop to about 2.4:1 at night */
+  --pencil:     oklch(0.5 0.014 262);
+  --crimson:    oklch(0.68 0.155 30);
+}
+#skirun { transition: background-color 3s ease; }
+#skirun.sk-night #skSky, #skirun.sk-night-start #skSky { transition: fill 3s ease; }
+
+/* ---------- hud ---------- */
+
+.sk-dist {
+  position: absolute;
+  top: max(18px, env(safe-area-inset-top));
+  left: max(20px, env(safe-area-inset-left));
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.2rem);
+  color: var(--ink);
+  pointer-events: none;
+}
+.sk-dist span { color: var(--crimson); }
+
+/* The mark to beat, kept under the live distance for the whole run. Muted so
+   it reads as a reference rather than as your score, and it turns crimson the
+   moment you pass it — at which point it stops being a target and starts
+   being the news. */
+.sk-pb {
+  position: absolute;
+  top: calc(max(18px, env(safe-area-inset-top)) + 2.5rem);
+  left: max(20px, env(safe-area-inset-left));
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(0.95rem, 0.8rem + 0.7vw, 1.3rem);
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+.sk-pb[hidden] { display: none; }
+.sk-pb-hit { color: var(--crimson); }
+
+.sk-score {
+  position: absolute;
+  top: calc(max(18px, env(safe-area-inset-top)) + 4.2rem);
+  left: max(20px, env(safe-area-inset-left));
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(1rem, 0.8rem + 0.9vw, 1.4rem);
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+/* how much of the combo window is left — the thing you're racing */
+.sk-meter {
+  position: absolute; left: 50%; top: calc(22% + 2.6rem); translate: -50% 0;
+  width: min(180px, 40vw); height: 4px;
+  background: oklch(0.5 0 0 / 0.2); border-radius: 2px; overflow: hidden;
+}
+.sk-meter[hidden] { display: none; }
+.sk-meter i {
+  display: block; height: 100%; background: var(--crimson);
+  transform-origin: left center;
+}
+
+.sk-combo {
+  position: absolute; left: 50%; top: 22%; translate: -50% 0;
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(1.4rem, 1rem + 2vw, 2.2rem);
+  color: var(--crimson);
+  pointer-events: none;
+}
+.sk-combo[hidden] { display: none; }
+.sk-combo b { font-size: 1.35em; }
+.sk-combo.sk-pop { animation: sk-pop 420ms var(--ease-out-quint); }
+@keyframes sk-pop {
+  0%   { opacity: 0; scale: 0.7; }
+  60%  { opacity: 1; scale: 1.08; }
+  100% { opacity: 1; scale: 1; }
+}
+
+.sk-quit {
+  position: absolute;
+  z-index: 1;                    /* above .sk-over's full-bleed scrim */
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  font-family: var(--type); font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 5px 15px;
+  box-shadow: 2px 2px 0 var(--btn-shadow);
+}
+.sk-quit:hover { translate: -1px -1px; box-shadow: 3px 3px 0 var(--btn-shadow); }
+
+.sk-shout, .sk-tip {
+  position: absolute; left: 50%; translate: -50% 0;
+  font-family: var(--hand); font-weight: 700;
+  color: var(--crimson);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.sk-shout { top: 12%; font-size: clamp(1.5rem, 1.1rem + 2vw, 2.4rem); }
+.sk-tip   { bottom: 16%; font-size: clamp(1rem, 0.9rem + 0.8vw, 1.3rem); color: var(--ink-muted); }
+.sk-shout[hidden], .sk-tip[hidden] { display: none; }
+
+.sk-help {
+  position: absolute;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 50%; translate: -50% 0;
+  font-family: var(--type); font-size: 0.8rem;
+  color: var(--ink-muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
+@media (pointer: coarse) { .sk-help { font-size: 0.75rem; } }
+
+/* ---------- the stamp when you stop ---------- */
+
+.sk-over {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  background: oklch(0.16 0.01 285 / 0.42);
+  backdrop-filter: blur(2px);
+}
+.sk-over[hidden] { display: none; }
+.sk-stamp {
+  background: var(--paper);
+  border-radius: 14px 10px 16px 9px / 10px 15px 9px 14px;
+  box-shadow: 0 22px 60px oklch(0 0 0 / 0.42);
+  rotate: -1.2deg;
+  padding: clamp(24px, 5vw, 40px) clamp(28px, 6vw, 52px);
+  text-align: center;
+  animation: rk-thump 460ms var(--ease-out-quint);
+}
+.sk-over-why { font-family: var(--type); font-size: 0.9rem; color: var(--ink-muted); margin-bottom: 6px; }
+.sk-over-dist {
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(2.4rem, 1.6rem + 4vw, 3.6rem);
+  line-height: 1; color: var(--ink);
+}
+.sk-over-dist span { color: var(--crimson); }
+.sk-over-best { font-family: var(--type); font-size: 0.9rem; color: var(--ink-muted); margin-top: 8px; }
+.sk-call {
+  font-family: var(--hand); font-weight: 700; font-size: 1.05rem;
+  margin-top: var(--sp-5);
+  padding: 8px 22px;
+  border-radius: 999px;
+  border: 2px solid var(--crimson);
+  background: var(--crimson); color: var(--paper);
+  box-shadow: 2px 2px 0 var(--btn-shadow);
+}
+.sk-call:hover { translate: -1px -1px; box-shadow: 4px 4px 0 var(--btn-shadow); }
+.sk-timer { height: 3px; margin-top: 14px; background: oklch(0.5 0 0 / 0.18); border-radius: 2px; overflow: hidden; }
+.sk-timer i { display: block; height: 100%; background: var(--crimson); transform-origin: left center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sk-f-leg, .sk-f-tail { animation: none; }
+  /* has to out-specify #skirun:not(.sk-airborne) .sk-rider-in, or the chatter
+     keeps running for exactly the people who asked it not to */
+  #skirun:not(.sk-airborne) .sk-rider-in { animation: none; }
+  .sk-stamp, .sk-combo { animation: none; }
+}
+
+/* fall-line ticks under the piste — a pencil map's way of showing steepness,
+   and what stops the paper below the ride line reading as nothing at all */
+.sk-hach {
+  fill: none; stroke: var(--pencil);
+  stroke-width: 2; stroke-linecap: round;
+  opacity: 0.30;
+}
+
+/* the 500 m markers down the piste, in the map's own fingerpost idiom */
+.sk-marker { color: var(--ink); }
+.sk-board { fill: var(--paper); stroke: var(--ink); stroke-width: 3.4; stroke-linejoin: round; }
+.sk-marker text {
+  font-family: var(--hand); font-weight: 700; font-size: 17px;
+  fill: var(--ink); text-anchor: middle;
+}
+
+/* the go-again countdown */
+@keyframes sk-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* ---------- ski: hazards read louder than scenery ---------- */
+
+/* the trees are BACKGROUND — they were nearly as dark as the rocks, and wider,
+   so the thing that kills you was the smaller, quieter shape on screen */
+
+/* and one crimson tick at the base of every rock: the only saturated thing
+   on the page, so the eye goes straight to it */
+.sk-rock-mark {
+  fill: none; stroke: var(--crimson);
+  stroke-width: 4; stroke-linecap: round;
+}
+
+/* a piste warns you before it hurts you */
+.sk-warn { color: var(--ink); }
+.sk-warn-plate { fill: var(--paper); stroke: var(--crimson); stroke-width: 4.5; stroke-linejoin: round; }
+.sk-warn-bang { fill: none; stroke: var(--crimson); stroke-width: 5; stroke-linecap: round; }
+.sk-warn-bang-dot { fill: var(--crimson); }
+.sk-warn text {
+  font-family: var(--hand); font-weight: 700; font-size: 15px;
+  fill: var(--crimson); text-anchor: middle;
+}
+
+/* a gap has to look like a hole, not like the ink stopping */
+.sk-face { fill: none; stroke: var(--ink); stroke-width: 4; stroke-linecap: round; }
+.sk-chasm-shade { fill: var(--ink); opacity: 0.12; stroke: none; }
+
+/* ---------- the trick chain, made legible ---------- */
+
+.sk-mult {
+  position: absolute; left: 50%; top: calc(22% + 3.4rem); translate: -50% 0;
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(1.6rem, 1.2rem + 2vw, 2.6rem);
+  color: var(--crimson);
+  pointer-events: none;
+}
+.sk-mult[hidden] { display: none; }
+
+.sk-bank {
+  position: absolute; left: 50%; top: calc(22% + 6.6rem); translate: -50% 0;
+  font-family: var(--hand); font-weight: 700;
+  font-size: clamp(1.1rem, 0.9rem + 1vw, 1.6rem);
+  color: var(--ink-muted);
+  pointer-events: none;
+  animation: sk-bank 1.3s ease-out forwards;
+}
+.sk-bank[hidden] { display: none; }
+@keyframes sk-bank {
+  0%   { opacity: 0; translate: -50% 8px; }
+  22%  { opacity: 1; translate: -50% 0; }
+  100% { opacity: 0; translate: -50% -22px; }
+}
+
+/* landing another trick refills the window — make that something you SEE */
+.sk-meter.sk-refill { animation: sk-refill 320ms var(--ease-out-quint); }
+@keyframes sk-refill {
+  0%   { scale: 1.28 1.9; }
+  100% { scale: 1 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk-bank, .sk-meter.sk-refill { animation: none; }
+}
+
+/* ---------- ski scenery: present, but a different register to the hazards ---------- */
+
+/* trees are back. They read as scenery because they're pencil-weight outlines
+   with nothing filled, while a hazard is solid ink with a crimson tick — the
+   distinction is treatment, not just size, so they can be visible again. */
+.sk-tree { color: var(--pencil); }
+.sk-tw {
+  fill: none; stroke: var(--pencil);
+  stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* things you pass: a cairn, a piste hut, marker flags, a frozen tarn */
+.sk-prop { opacity: 0.55; }
+.sk-pw {
+  fill: none; stroke: var(--pencil);
+  stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+}
+.sk-pw-flag { fill: var(--crimson); stroke: none; opacity: 0.75; }
+
+/* ---------- rails: the third verb ---------- */
+
+.sk-rail-post { fill: none; stroke: var(--ink); stroke-width: 2.6; stroke-linecap: round; opacity: 0.7; }
+.sk-rail-bar  { fill: none; stroke: var(--ink); stroke-width: 5; stroke-linecap: round; }
+/* it lights up while you're actually on it */
+.sk-rail-live .sk-rail-bar { stroke: var(--crimson); }
+
+/* the big-air marker: a terrain-park sign, not a hazard triangle */
+.sk-big { color: var(--ink); }
+.sk-big-plate { fill: var(--paper); stroke: var(--ink); stroke-width: 4; stroke-linejoin: round; }
+.sk-big-arc { fill: none; stroke: var(--crimson); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 5 6; }
+.sk-big text {
+  font-family: var(--hand); font-weight: 700; font-size: 16px;
+  fill: var(--ink); text-anchor: middle;
+}
+
+/* snow off the edges — the cheapest way to make speed legible */
+.sk-spray {
+  fill: none; stroke: var(--pencil);
+  stroke-width: 2.6; stroke-linecap: round;
+  opacity: 0.5;
+}
+
+/* the rooster tail off a landed trick */
+.sk-spray {
+  fill: none; stroke: var(--pencil);
+  stroke-width: 4; stroke-linecap: round;
+}
+/* the ridiculous one announces itself */
+.sk-big-huge .sk-big-plate { stroke: var(--crimson); stroke-width: 5; }
+.sk-big-huge text { fill: var(--crimson); letter-spacing: 0.06em; }
+
+
+/* boarding the ski chair: the hiker takes his seated pose, no campfire zzz */
+body.boarding #hikerWalk { display: none; }
+body.boarding #hikerSit  { display: block; }
+
+/* The chair waiting off the edge. Its paths need their own rules: `.ink` is
+   only styled inside .landmark / .ink-decor, so bare ink paths elsewhere
+   render as zero-area fills — i.e. invisible. */
+#skiChair path {
+  fill: none; stroke: var(--ink);
+  stroke-linecap: round; stroke-linejoin: round;
+  stroke-width: 4;
+}
+#skiChair .thin { stroke-width: 2.6; }
+#skiChair .hairline { stroke-width: 1.8; opacity: 0.5; }
+
+/* a bridge hangs over the void: planks and a sagging handrail, no posts */
+.sk-rail-bridge .sk-rail-post { stroke-width: 2.2; opacity: 0.85; }
+.sk-rail-bridge .sk-rail-bar { stroke-width: 5.5; }

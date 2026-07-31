@@ -46,7 +46,7 @@
   </button>
 
   <p class="hint-chip" id="hintChip">
-    <span>walk — <kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> or click anywhere</span>
+    <span>walk — <kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> · click, or hold to lead</span>
     <span><kbd>esc</kbd> for contents</span>
   </p>
 
@@ -123,11 +123,6 @@
       <path id="routePath" class="pencil-route" d="" filter="url(#roughen)"/>
 
       <!-- coffee ring -->
-      <g id="decorRing" class="pencil">
-        <circle r="36" fill="none" stroke="currentColor" stroke-width="7" opacity="0.09"/>
-        <circle r="33" fill="none" stroke="currentColor" stroke-width="1.6" opacity="0.13"/>
-      </g>
-
       <g id="decorSun" class="ink-decor egg" tabindex="0" role="button"
          aria-pressed="false" aria-label="Turn the map to night">
         <circle class="egg-halo" r="44"/>
@@ -146,13 +141,16 @@
         </g>
       </g>
 
-      <g id="decorCompass" class="ink-decor" filter="url(#roughen)">
+      <g id="decorCompass" class="ink-decor egg" tabindex="0" role="button"
+         aria-label="Compass — give the needle a spin" filter="url(#roughen)">
         <circle r="46" fill="none" stroke="currentColor" stroke-width="3"/>
         <circle r="37" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="1 7" stroke-linecap="round"/>
         <path d="M0,-46 L8,0 L0,46 L-8,0 Z" fill="none" stroke="currentColor" stroke-width="2"/>
         <path d="M-46,0 L0,8 L46,0 L0,-8 Z" fill="none" stroke="currentColor" stroke-width="2"/>
-        <path class="crimson-fill" d="M0,-33 L7,0 L-7,0 Z"/>
-        <path d="M0,33 L7,0 L-7,0 Z" fill="none" stroke="currentColor" stroke-width="2"/>
+        <g class="rose-needle">
+          <path class="crimson-fill" d="M0,-33 L7,0 L-7,0 Z"/>
+          <path d="M0,33 L7,0 L-7,0 Z" fill="none" stroke="currentColor" stroke-width="2"/>
+        </g>
         <text class="hand-sm knock" x="0" y="-56" text-anchor="middle">N</text>
         <text class="hand-sm knock" x="58" y="5" text-anchor="middle">E</text>
         <text class="hand-sm knock" x="0" y="68" text-anchor="middle">S</text>
@@ -182,12 +180,33 @@
 
       <text id="signature" class="hand-sig knock" text-anchor="end">— C.M.</text>
 
-      <!-- earned once you've run off the map and got somewhere -->
+      <!-- Waits just off the right edge; the map slides over to find it.
+           Seat sits at knee height so the pair can actually get into it — the
+           first attempt put the seat above the hiker's head, which is why it
+           read as a signpost rather than a chair. -->
+      <g id="skiChair" style="display:none" aria-hidden="true">
+        <path class="ink hairline" d="M2,-132 L900,-604"/>
+        <path class="ink" d="M-9,-132 L11,-133"/>
+        <path class="ink" d="M1,-130 L2,-88 L-28,-78"/>
+        <path class="ink" d="M-28,-78 L-33,-29 L31,-32"/>
+        <path class="ink thin" d="M-31,-21 L30,-24"/>
+        <path class="ink thin" d="M-16,-72 L26,-69"/>
+        <path class="ink thin" d="M29,-32 L35,-11 L9,-8"/>
+      </g>
+
+      <!-- one keepsake per way off the paper, each pointing the way you'd
+           go to beat it: the run out the right, the ski run out the left -->
       <g id="signpost" tabindex="0" role="button" style="display:none">
-        <path class="sp-ink" d="M0,54 L0,-2"/>
-        <path class="sp-board" d="M-58,-40 L34,-40 L52,-21 L34,-2 L-58,-2 Z"/>
-        <text id="signpostText" x="-12" y="-15">0 m</text>
-        <path class="sp-ink" d="M-14,44 L14,44"/>
+        <path class="sp-ink" d="M0,31 L0,-1"/>
+        <path class="sp-board" d="M33,-23 L-19,-23 L-30,-12 L-19,-1 L33,-1 Z"/>
+        <text id="signpostText" x="7" y="-8">0 m</text>
+        <path class="sp-ink" d="M-8,25 L8,25"/>
+      </g>
+      <g id="skiSign" tabindex="0" role="button" style="display:none">
+        <path class="sp-ink" d="M0,31 L0,-1"/>
+        <path class="sp-board" d="M-33,-23 L19,-23 L30,-12 L19,-1 L-33,-1 Z"/>
+        <text id="skiSignText" x="-7" y="-8">0 m</text>
+        <path class="sp-ink" d="M-8,25 L8,25"/>
       </g>
 
       <!-- ======================= LANDMARKS ======================= -->
@@ -655,7 +674,7 @@
       <ol id="contentsList"></ol>
     </nav>
     <p class="contents-note">…or close this and simply walk there — arrow keys, or tap anywhere on the map.</p>
-    <p class="contents-note contents-tip">Press <kbd>T</kbd> to throw a stick for <span id="dogNameTip"></span>.</p>
+    <p class="contents-note contents-tip">Throw a stick for <span id="dogNameTip"></span>: press <kbd>T</kbd>, or tap him twice.</p>
     <p class="colophon" id="colophon"></p>
   </article>
 </dialog>
@@ -678,7 +697,7 @@
 </dialog>
 
 <script src="photos.js"></script>
-<script src="runner.js"></script>
+<!-- the games are fetched on demand — see loadGame() in game.js -->
 <script src="game.js"></script>
 </body>
 </html>

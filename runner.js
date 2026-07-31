@@ -10,6 +10,8 @@
      ↑     jump the log
      ↓     sploot under the branch
      esc   call him back
+     touch: swipe the same four directions (fires mid-swipe, no lift
+     needed) · the esc chip becomes a tappable ✕
 
    One life. The run ends, you get three seconds to go again, and if
    you don't he comes trotting back and you're on the map.
@@ -33,6 +35,7 @@ window.Runner = (function () {
   const lerp = (a, b, t) => a + (b - a) * t;
   const rand = (a, b) => a + Math.random() * (b - a);
   const TAU = Math.PI * 2;
+  const TOUCH = matchMedia("(pointer: coarse)");
 
   /* ---------- the view ---------- */
 
@@ -71,7 +74,16 @@ window.Runner = (function () {
   }
 
   const STEP = 7, CORNER_R = 44;
-  const INTRO_MS = 2700, OVER_WAIT_MS = 3000, RECALL_MS = 2100;
+  const INTRO_MS = 2700, OVER_WAIT_MS = 3000, RECALL_MS = 2600;
+
+  /* Calling him back used to cut him straight to the far distance — he'd be
+     filling the screen one frame and a speck on the horizon the next. Now it
+     picks up from exactly where he's stood: he carries on a few paces and
+     pulls up (still seen from behind), turns, and trots back to you. */
+  const RECALL_TURN = 0.34;      // of the recall spent trotting on and turning
+  const RECALL_Z_FAR = 168;      // how far up the trail he gets before he turns
+  const RECALL_Z_NEAR = 46;      // and how close he ends up
+  let recallZ0 = CAM_BACK, recallX0 = null;
 
   /* ---------- state ---------- */
 
@@ -152,6 +164,10 @@ window.Runner = (function () {
       addCorner(Math.random() < 0.5 ? -1 : 1);
     }
   }
+
+  /* The mark to beat, kept on screen while you run. Read once per run —
+     localStorage is synchronous and this would otherwise be a per-frame hit. */
+  let pbEl = null, pbMark = 0, pbBeaten = false;
 
   function resetTrack() {
     track = []; corners = []; obstacles = []; ci = 0; sinceBreather = 0;
@@ -291,6 +307,7 @@ window.Runner = (function () {
         <g id="rkDogFront">${DOG_FRONT}</g>
       </svg>
       <p class="rk-dist"><span id="rkDist">0</span> m</p>
+      <p class="rk-pb" id="rkPB" hidden></p>
       <button class="rk-quit" id="rkQuit" aria-label="Call Felix back and return to the map">esc</button>
       <p class="rk-shout" id="rkShout" hidden></p>
       <p class="rk-tip" id="rkTip" hidden></p>
@@ -317,6 +334,7 @@ window.Runner = (function () {
       bar: $("#rkTimerBar", root),
     };
     distEl = $("#rkDist", root);
+    pbEl = $("#rkPB", root);
     overBox = $("#rkOver", root);
 
     for (let i = 0; i < 16; i++) {
@@ -354,6 +372,12 @@ window.Runner = (function () {
 
     $("#rkQuit", root).addEventListener("click", () => startRecall());
     $("#rkAgain", root).addEventListener("click", () => { clearTimeout(overTimer); reset(); });
+
+    if (TOUCH.matches) {
+      // no keyboard here: the footer teaches swipes, and "esc" would be a lie
+      $(".rk-help", root).textContent = "swipe — ← → corner · ↑ jump · ↓ sploot";
+      $("#rkQuit", root).textContent = "✕";
+    }
   }
 
   function measure() {
@@ -396,6 +420,11 @@ window.Runner = (function () {
     root.classList.remove("rk-done");
     taught = {}; tipT = 0; Lr.tip.hidden = true;
     distEl.textContent = "0";
+    pbMark = best();
+    pbBeaten = false;
+    pbEl.hidden = pbMark <= 0;                 // "best 0 m" is just noise
+    pbEl.textContent = `best ${pbMark} m`;
+    pbEl.classList.remove("rk-pb-hit");
     Lr.shout.hidden = false;
     Lr.shout.textContent = "after him!";
     setMode("intro");
@@ -428,15 +457,36 @@ window.Runner = (function () {
     }
     e.preventDefault();
   }
-  let tx = null, ty = null;
-  function onTouchStart(e) { const t = e.changedTouches[0]; tx = t.clientX; ty = t.clientY; }
-  function onTouchEnd(e) {
-    if (tx === null) return;
-    const t = e.changedTouches[0], dx = t.clientX - tx, dy = t.clientY - ty;
-    tx = ty = null;
-    if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
+  /* Touch: the gesture fires the moment the finger has travelled far enough —
+     mid-swipe, finger still down. Waiting for the lift (the old way) added a
+     beat of lag that felt unfair at speed. One action per touch; whatever the
+     finger does after the swipe registers is ignored until it lifts. */
+  let tx = null, ty = null, swiped = false;
+  const SWIPE_PX = 28;
+
+  function classifySwipe(dx, dy) {
     if (Math.abs(dx) > Math.abs(dy)) turn(dx > 0 ? 1 : -1);
     else if (dy < 0) jump(); else duck();
+  }
+  function onTouchStart(e) {
+    const t = e.changedTouches[0];
+    tx = t.clientX; ty = t.clientY; swiped = false;
+  }
+  function onTouchMove(e) {
+    e.preventDefault();               // no pull-to-refresh, no rubber-banding
+    if (tx === null || swiped) return;
+    const t = e.changedTouches[0], dx = t.clientX - tx, dy = t.clientY - ty;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_PX) return;
+    swiped = true;
+    classifySwipe(dx, dy);
+  }
+  function onTouchEnd(e) {
+    // a quick flick can lift before any touchmove crossed the threshold
+    if (tx === null || swiped) { tx = ty = null; return; }
+    const t = e.changedTouches[0], dx = t.clientX - tx, dy = t.clientY - ty;
+    tx = ty = null;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_PX) return;
+    classifySwipe(dx, dy);
   }
 
   /* ---------- frame ---------- */
@@ -456,13 +506,28 @@ window.Runner = (function () {
   }
   function teach() {
     if (tipT > 0) return;
+    const sw = TOUCH.matches;   // thumbs get swipe words, not key glyphs
     // the whole scheme up front, then each one again when it first matters
-    if (!taught.all) { say("all", "← → corners · ↑ jump · ↓ sploot", 4); return; }
-    if (!taught.corner) { say("corner", "← → to take the corners", 3.2); return; }
+    if (!taught.all) {
+      say("all", sw ? "swipe — ← → corners · ↑ jump · ↓ sploot"
+                    : "← → corners · ↑ jump · ↓ sploot", 4);
+      return;
+    }
+    if (!taught.corner) {
+      say("corner", sw ? "swipe ← or → to take the corners"
+                       : "← → to take the corners", 3.2);
+      return;
+    }
     const soon = (kind) => obstacles.some(
       (o) => !o.passed && o.kind === kind && o.s - pS > 40 && o.s - pS < SEE_AHEAD);
-    if (soon("log")) { say("log", "↑ to jump the log", 3.2); return; }
-    if (soon("branch")) { say("branch", "↓ to sploot under the branch", 3.4); return; }
+    if (soon("log")) {
+      say("log", sw ? "swipe up to jump the log" : "↑ to jump the log", 3.2);
+      return;
+    }
+    if (soon("branch")) {
+      say("branch", sw ? "swipe down to sploot under the branch"
+                       : "↓ to sploot under the branch", 3.4);
+    }
   }
 
   function tick(now) {
@@ -505,7 +570,13 @@ window.Runner = (function () {
           }
         }
       }
-      distEl.textContent = Math.floor(pS / 4);
+      const metresNow = Math.floor(pS / 4);
+      distEl.textContent = metresNow;
+      if (pbMark > 0 && !pbBeaten && metresNow > pbMark) {
+        pbBeaten = true;                        // once, not every frame
+        pbEl.textContent = "new best!";
+        pbEl.classList.add("rk-pb-hit");
+      }
     } else if (mode === "recall") {
       const t = clamp(modeT / (RECALL_MS / 1000), 0, 1);
       if (t >= 1) { quit(); return; }
@@ -701,18 +772,32 @@ window.Runner = (function () {
 
     // Felix — running, splooted, or coming back
     const ducking = duckT >= 0;
-    Lr.dog.style.display = mode !== "recall" && !ducking ? "" : "none";
-    Lr.sploot.style.display = mode !== "recall" && ducking ? "" : "none";
-    Lr.front.style.display = mode === "recall" ? "" : "none";
+    const recalling = mode === "recall";
+    const rT = recalling ? clamp(modeT / (RECALL_MS / 1000), 0, 1) : 0;
+    const goingOn = recalling && rT < RECALL_TURN;   // still seen from behind
 
-    if (mode === "recall") {
-      const t = clamp(modeT / (RECALL_MS / 1000), 0, 1);
-      const eased = 1 - Math.pow(1 - t, 2.2);
-      const zc = lerp(340, 46, eased);
+    Lr.dog.style.display = (recalling ? goingOn : !ducking) ? "" : "none";
+    Lr.sploot.style.display = !recalling && ducking ? "" : "none";
+    Lr.front.style.display = recalling && !goingOn ? "" : "none";
+
+    if (recalling) {
+      let zc, ease;
+      if (goingOn) {
+        // pulls up as he goes, so the turn lands on a decelerating beat
+        const k = rT / RECALL_TURN;
+        ease = 1 - Math.pow(1 - k, 2);
+        zc = lerp(recallZ0, RECALL_Z_FAR, ease);
+      } else {
+        const k = (rT - RECALL_TURN) / (1 - RECALL_TURN);
+        ease = 1 - Math.pow(1 - k, 2.2);
+        zc = lerp(RECALL_Z_FAR, RECALL_Z_NEAR, ease);
+      }
+      // drift back to the middle of the trail while he's heading away
+      const x = goingOn ? lerp(recallX0, cx, ease) : cx;
       const s = FOCAL / zc;
-      Lr.front.setAttribute("transform",
-        `translate(${cx.toFixed(1)},${(horizonY + (CAM_HEIGHT / zc) * FOCAL).toFixed(1)}) scale(${(s * 0.2).toFixed(3)})`);
-      root.style.setProperty("--rk-cadence", "150ms");
+      (goingOn ? Lr.dog : Lr.front).setAttribute("transform",
+        `translate(${x.toFixed(1)},${(horizonY + (CAM_HEIGHT / zc) * FOCAL).toFixed(1)}) scale(${(s * 0.2).toFixed(3)})`);
+      root.style.setProperty("--rk-cadence", goingOn ? "230ms" : "150ms");
     } else {
       const shown = ducking ? Lr.sploot : Lr.dog;
       const pd = project(px, pz, lift());
@@ -755,6 +840,11 @@ window.Runner = (function () {
     overBox.hidden = true;
     Lr.shout.hidden = false;
     Lr.shout.textContent = "Felix! here boy —";
+    /* Take the baton from wherever he actually is — mid-corner he won't be
+       centred, and starting anywhere else is the jump we're avoiding. */
+    const here = project(px, pz, lift());
+    recallX0 = here ? here.x : cx;
+    recallZ0 = here ? FOCAL / here.s : CAM_BACK;
     setMode("recall");
     if (raf === 0) { lastT = performance.now(); raf = requestAnimationFrame(tick); }
   }
@@ -768,6 +858,7 @@ window.Runner = (function () {
     root.hidden = true;
     removeEventListener("keydown", onKey, true);
     root.removeEventListener("touchstart", onTouchStart);
+    root.removeEventListener("touchmove", onTouchMove);
     root.removeEventListener("touchend", onTouchEnd);
     removeEventListener("resize", measure);
     document.body.classList.remove("running-game");
@@ -782,6 +873,9 @@ window.Runner = (function () {
     measure();
     addEventListener("keydown", onKey, true);
     root.addEventListener("touchstart", onTouchStart, { passive: true });
+    /* passive:false so preventDefault actually blocks the browser's own
+       pan/pull-to-refresh — a down-swipe must only ever mean sploot */
+    root.addEventListener("touchmove", onTouchMove, { passive: false });
     root.addEventListener("touchend", onTouchEnd, { passive: true });
     addEventListener("resize", measure);
     reset();
@@ -794,7 +888,7 @@ window.Runner = (function () {
 
   return {
     start, best, KEEPSAKE_AT: 250,
-    _dbg: () => ({ mode, modeT, pS, speed, corners, obstacles, ci, phase: phaseAt(pS), windowIn: windowIn() }),
+    _dbg: () => ({ mode, modeT, pS, speed, corners, obstacles, ci, phase: phaseAt(pS), windowIn: windowIn(), jumpT, duckT }),
     _phaseAt: phaseAt,
     /* Build a whole track offline and hand back its layout. Used to check the
        shape of a long run without having to survive one. */

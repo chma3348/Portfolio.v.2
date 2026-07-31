@@ -70,7 +70,7 @@ const ARRANGE = {
       scale:   [0.500, 0.930],
     },
     sig: [0.955, 0.062],
-    signpost: [0.055, 0.845],
+    signposts: { runner: [0.038, 0.845], ski: [0.962, 0.845] },
   },
 
   // tall screens: a zigzag trail down the page, using the height.
@@ -89,9 +89,8 @@ const ARRANGE = {
       compass: [0.855, 0.150],
       sun:     [0.120, 0.365],
       birds:   [0.870, 0.520],
-      ring:    [0.130, 0.665],
     },
-    signpost: [0.880, 0.800],
+    signposts: { runner: [0.062, 0.885], ski: [0.938, 0.795] },
   },
 
   /* Small phones (a 320x568 screen, a landscape phone). Five stacked stops
@@ -118,7 +117,6 @@ const DECOR_NODES = {
   compass: "#decorCompass",
   sun:     "#decorSun",
   birds:   "#decorBirds",
-  ring:    "#decorRing",
   scale:   "#decorScale",
 };
 
@@ -194,7 +192,19 @@ function applyLayout(keepPosition = false) {
   sig.style.display = arrangement.sig ? "" : "none";
   if (arrangement.sig) place(sig, px(arrangement.sig), art);
 
-  const spSpot = arrangement.signpost ? px(arrangement.signpost) : null;
+  /* Kept off the edges in PIXELS, not fractions. The board is a fixed 65
+     units wide, so on a narrow phone a fraction that reads as "tucked into
+     the corner" on a desktop puts it 3px from the edge and looks like it's
+     falling off the paper. */
+  const spSpots = {};
+  const spHalf = 34 * art, spPad = 14;
+  for (const g of ["runner", "ski"]) {
+    const f = arrangement.signposts && arrangement.signposts[g];
+    if (f) {
+      const [sx, sy] = px(f);
+      spSpots[g] = { x: clamp(sx, spPad + spHalf, W - spPad - spHalf), y: sy };
+    }
+  }
 
   // the trail threads the stops in ring order, not list order
   $("#routePath").setAttribute("d", smoothLoop([
@@ -204,6 +214,7 @@ function applyLayout(keepPosition = false) {
   startNote.style.display = arrangement.hideNote ? "none" : "";
 
   const birdsSpot = arrangement.decor.birds ? px(arrangement.decor.birds) : null;
+  const compassSpot = arrangement.decor.compass ? px(arrangement.decor.compass) : null;
 
   hikerScale.setAttribute("transform", `scale(${hik.toFixed(3)})`);
   dogScaleEl.setAttribute("transform", `scale(${hik.toFixed(3)})`);
@@ -229,7 +240,8 @@ function applyLayout(keepPosition = false) {
     trailStep: Math.max(20, 0.022 * Math.hypot(W, H)),
     leash: 44 * hik,
     birds: birdsSpot ? { x: birdsSpot[0], y: birdsSpot[1] } : null,
-    signpost: spSpot ? { x: spSpot[0], y: spSpot[1] } : null,
+    compass: compassSpot ? { x: compassSpot[0], y: compassSpot[1] } : null,
+    signposts: spSpots,
   };
 
   if (held) { pos.x = held.fx * W; pos.y = held.fy * H; }
@@ -454,6 +466,9 @@ function tick(now) {
   const dt = Math.min((now - lastT) / 1000, 0.05);
   lastT = now;
 
+  // …unless the pair are still boarding the chair, which happens here
+  if (boarding) { updateBoarding(dt); requestAnimationFrame(tick); return; }
+
   // the map idles while you're off running
   if (runnerActive) { requestAnimationFrame(tick); return; }
 
@@ -520,6 +535,7 @@ function tick(now) {
   updateDog(dt, moved);
   updateStick(dt);
   checkBirds(now);
+  updateRose(dt);
   updateNeedle();
   updateEdge(dt);
 
@@ -565,6 +581,9 @@ $$("dialog").forEach((d) =>
 
 addEventListener("keydown", (e) => {
   if (e.defaultPrevented || anyDialogOpen()) return;
+  /* a game owns the screen while it's up; only its own keys count, or Escape
+     out of the runner also opens Contents on top of it */
+  if (runnerActive || chase) return;
 
   const dir = KEYMAP[e.key];
   if (dir) {
@@ -640,8 +659,37 @@ world.addEventListener("pointerdown", (e) => {
     target = { x, y };
     pingAt(x, y);
   }
+
+  /* Keep hold of this press: while the button or finger stays down, the
+     walk target tracks the pointer, so you can lead the pair around the
+     map rather than tapping stepping stones. */
+  dragPointer = e.pointerId;
+  try { world.setPointerCapture(e.pointerId); } catch (_) {}
+
   e.preventDefault();
 });
+
+/* --- hold and they follow: press, keep it held, and lead the way --- */
+
+let dragPointer = null;
+
+world.addEventListener("pointermove", (e) => {
+  if (dragPointer === null || e.pointerId !== dragPointer) return;
+  const pt = svgPoint(e);
+  const x = clamp(pt.x, layout.bounds.x1, layout.bounds.x2);
+  const y = clamp(pt.y, layout.bounds.y1, layout.bounds.y2);
+  if (REDUCED.matches) {
+    pos.x = x; pos.y = y; renderHiker();
+  } else {
+    target = { x, y };      // no ping ring — the moving pair is the feedback
+  }
+});
+
+function endDrag(e) {
+  if (e.pointerId === dragPointer) dragPointer = null;
+}
+world.addEventListener("pointerup", endDrag);
+world.addEventListener("pointercancel", endDrag);
 
 /* keyboard activation of a focused landmark drawing */
 world.addEventListener("keydown", (e) => {
@@ -678,6 +726,64 @@ sunEgg.addEventListener("keydown", (e) => {
   if (e.key === "Enter" || e.key === " ") {
     e.preventDefault(); e.stopPropagation();
     setNight(!document.body.classList.contains("night"));
+  }
+});
+
+/* --- the compass rose: give it a spin and it finds true north (Felix) --- */
+
+const roseEl = $("#decorCompass");
+const roseNeedle = $("#decorCompass .rose-needle");
+let rose = null;   // { deg, vel, phase: "spin" | "track" | "settle", t }
+
+/* rotate(0) points the needle up; screen-angle to the dog, needle-relative */
+function roseAngleToDog() {
+  const c = layout.compass;
+  if (!c) return 0;
+  return Math.atan2(dogPos.y - c.y, dogPos.x - c.x) * 180 / Math.PI + 90;
+}
+
+function arcTo(from, to) { return ((to - from + 540) % 360) - 180; }
+
+function spinRose() {
+  stirCamp();
+  firstInput();
+  if (REDUCED.matches) {
+    // no theatrics: it just quietly finds him, then lets go
+    roseNeedle.setAttribute("transform", `rotate(${roseAngleToDog().toFixed(1)})`);
+    clearTimeout(spinRose._t);
+    spinRose._t = setTimeout(() => roseNeedle.removeAttribute("transform"), 2600);
+    return;
+  }
+  rose = { deg: rose ? rose.deg : 0, vel: 1400 + Math.random() * 500, phase: "spin", t: 0 };
+}
+
+function updateRose(dt) {
+  if (!rose) return;
+  rose.t += dt;
+  if (rose.phase === "spin") {
+    rose.vel *= Math.pow(0.22, dt);              // winds down quickly
+    rose.deg += rose.vel * dt;
+    if (rose.vel < 150) { rose.phase = "track"; rose.t = 0; }
+  } else if (rose.phase === "track") {
+    // it settles on Felix and holds, quivering like a real needle
+    const aim = roseAngleToDog() + Math.sin(rose.t * 6.5) * 3.5;
+    rose.deg += arcTo(rose.deg, aim) * Math.min(1, dt * 5);
+    if (rose.t > 4.2) { rose.phase = "settle"; rose.t = 0; }
+  } else {
+    const back = arcTo(rose.deg, 0);
+    if (Math.abs(back) < 0.8) { roseNeedle.removeAttribute("transform"); rose = null; return; }
+    rose.deg += back * Math.min(1, dt * 2.5);
+  }
+  roseNeedle.setAttribute("transform",
+    `rotate(${(((rose.deg % 360) + 360) % 360).toFixed(1)})`);
+}
+
+roseEl.addEventListener("pointerdown", (e) => {
+  e.preventDefault(); e.stopPropagation(); spinRose();
+});
+roseEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault(); e.stopPropagation(); spinRose();
   }
 });
 
@@ -745,6 +851,11 @@ function updateEdge(dt) {
   if (runnerActive || chase || anyDialogOpen()) {
     edgePush = 0; edgeHint.classList.remove("on"); hideTrailPrompt(); return;
   }
+  /* Mid-drag the pointer often sweeps along a boundary; that's steering, not
+     leaving. The edge only starts counting once the press is released. */
+  if (dragPointer !== null) {
+    edgePush = 0; edgeHint.classList.remove("on"); hideTrailPrompt(); return;
+  }
 
   const dir = edgePressed();
   if (!dir) {
@@ -764,6 +875,8 @@ function updateEdge(dt) {
   if (edgePush > EDGE_HINT_AFTER) {
     const out = { right: [1, 0], left: [-1, 0], up: [0, -1], down: [0, 1] }[dir];
     edgeHintText.textContent = edgeGoesToGallery(dir) ? "every photo" : "off the map";
+    // earliest moment we know a game is on their mind — start fetching it
+    if (!edgeGoesToGallery(dir)) prefetchGame(gameForEdge(dir));
     const len = 54 * layout.art;
     const x1 = pos.x + out[0] * 22 * layout.hik;
     const y1 = pos.y - 20 * layout.hik + out[1] * 20 * layout.hik;
@@ -800,6 +913,8 @@ function stepOffTheEdge() {
     hideTrailPrompt();
     edgeHint.classList.remove("on");
     openSection("everything");
+  } else if (edgeDir === "right") {
+    leaveForSki();
   } else {
     leaveTheMap();
   }
@@ -814,7 +929,8 @@ function showTrailPrompt(x, y, out) {
   if (promptShown) return;
   promptShown = true;
   trailPrompt.textContent =
-    edgeGoesToGallery(edgeDir) ? "see every photo →" : "hit the trail →";
+    edgeGoesToGallery(edgeDir) ? "see every photo →"
+      : edgeDir === "left" ? "← hit the trail" : "hit the slopes →";
   const r = stage.getBoundingClientRect();
   const px2 = clamp(x + out[0] * 6, 90, layout.W - 90);
   const py2 = clamp(y + out[1] * 22 + 26, 44, layout.H - 44);
@@ -836,6 +952,58 @@ trailPrompt.addEventListener("click", (e) => {
 
 let runnerActive = false;
 
+/* ------------------------------------------------------------
+   The games load on demand.
+
+   They used to be plain <script> tags, so every visitor parsed the
+   whole of a game they'd probably never open before the map could
+   appear. Now the fetch starts the moment someone leans on an edge,
+   and the squirrel chase gives it five seconds of cover — a dozen
+   kilobytes lands long before anything needs it.
+
+   Bests are read straight from localStorage rather than from the
+   module, so the keepsake signposts still show up for a returning
+   visitor who hasn't loaded a game this session.
+   ------------------------------------------------------------ */
+
+const GAMES = {
+  runner: { src: "runner.js", global: "Runner", bestKey: "fieldnotes-run-best", keepsakeAt: 250 },
+  ski:    { src: "ski.js",    global: "Ski",    bestKey: "fieldnotes-ski-best", keepsakeAt: 150 },
+};
+
+/* which way off the paper leads where */
+const gameForEdge = (dir) => (dir === "left" ? "runner" : "ski");
+
+const gameLoads = {};
+
+function loadGame(name) {
+  const g = GAMES[name];
+  if (window[g.global]) return Promise.resolve(window[g.global]);
+  if (gameLoads[name]) return gameLoads[name];
+
+  const p = new Promise((resolve, reject) => {
+    const el = document.createElement("script");
+    el.src = g.src;
+    el.async = true;
+    el.onload = () => (window[g.global] ? resolve(window[g.global]) : reject(new Error(g.src)));
+    el.onerror = () => reject(new Error(g.src));
+    document.head.appendChild(el);
+  });
+  gameLoads[name] = p;
+  // a failed fetch mustn't poison the cache — let the next attempt try again
+  p.catch(() => { delete gameLoads[name]; });
+  return p;
+}
+
+/* start fetching as soon as the edge hint shows, which is the earliest
+   moment we know a game is even on their mind */
+function prefetchGame(name) { loadGame(name).catch(() => {}); }
+
+function bestFor(name) {
+  try { return parseInt(localStorage.getItem(GAMES[name].bestKey) || "0", 10) || 0; }
+  catch (_) { return 0; }
+}
+
 /* ---------------------------------------------------------------
    The chase starts here, on the map. A squirrel breaks across the
    paper, Felix leaves your side to go after it, they both run off
@@ -846,47 +1014,144 @@ let runnerActive = false;
 const mapSquirrel = $("#mapSquirrel");
 const chaseFade = $("#chaseFade");
 const CHASE_MS = 5200;
-const DOG_LAG = 0.42;          // seconds behind — he runs where it just was
+/* How far behind it he runs. Not a flat pixel count: what decides whether he
+   ends up nose-to-nose with it is how much *curve* sits between them, so the
+   gap is capped both by a slice of the route and by the map's tight side —
+   a narrow phone turns the loop far sharper than a desktop does. */
+const DOG_GAP_F = 0.035, DOG_GAP_SIDE = 0.10;
+const DOG_GAP_MIN = 40, DOG_GAP_MAX = 150;
 let chase = null;
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 
-/* A proper little chase: it breaks cover, loops him round the map twice,
-   doubles back past his nose, then bolts for the edge with him after it. */
+/* A proper little chase: it breaks cover on the far side, sweeps the top,
+   dives past his nose, loops the bottom and the far flank, cuts back across
+   the middle and bolts out the edge with him at its heels.
+
+   Every waypoint is a THROUGH-pass — the route never doubles back on itself.
+   That matters more than it sounds: Felix follows a fixed distance back down
+   this same line, so at any hairpin he'd be on the far side of the turn,
+   spatially right on top of the squirrel and pointing straight at it. The
+   old route darted at the hiker and reversed, and the two of them met
+   head-on at 18px every single run. Turn angles here stay wide enough that
+   the gap between them never closes below about half a leash. */
 function chaseRoute(out) {
   const b = layout.bounds;
   const W = b.x2 - b.x1, H = b.y2 - b.y1;
-  const inx = (fx, fy) => ({ x: b.x1 + W * fx, y: b.y1 + H * fy });
-  const near = { x: pos.x, y: pos.y };
-  const pts = [
-    inx(0.5 + 0.34 * -out[0], 0.5 + 0.34 * -out[1]),   // enters opposite the exit
-    { x: near.x - 120 * out[1] - 40 * out[0], y: near.y - 120 * out[0] - 40 * out[1] },
-    inx(0.22, 0.28),
-    inx(0.74, 0.24),
-    { x: near.x + 90 * out[1], y: near.y + 90 * out[0] },   // cheeky pass by his nose
-    inx(0.28, 0.74),
-    inx(0.68, 0.7),
-    { x: near.x + 60 * out[0], y: near.y + 60 * out[1] },
-    {                                                        // and gone
+  const s = out[0] >= 0 ? 1 : -1;                    // mirror the lot for a left exit
+  const m = (fx, fy) => ({ x: b.x1 + W * (s > 0 ? fx : 1 - fx), y: b.y1 + H * fy });
+  /* The loop is pure map fractions — pinning waypoints to the hiker used to
+     wrench the shape about depending on where they'd stopped, which is what
+     put a kink in it. The close pass comes free instead: they're stood
+     against the exit edge, and the last two points run level with them and
+     straight out, so it goes right past their nose without ever turning back. */
+  /* Sharp turns are only a problem where x has stopped advancing — that's
+     what puts Felix, a fixed distance back down the line, on the far side of
+     a fold and nose-to-nose with it. So the one genuine U-turn (the far
+     flank) is drawn as a two-point arc rather than a single corner, and the
+     tail keeps driving sideways while it eases towards the hiker's height. */
+  return [
+    m(0.06, 0.55),          // breaks cover, far side
+    m(0.19, 0.19),          // up
+    m(0.45, 0.11),          // across the top
+    m(0.71, 0.21),          // curving down, still travelling out
+    m(0.88, 0.44),          // brushes the exit edge, right past them
+    m(0.79, 0.73),          // carries on down
+    m(0.51, 0.88),          // across the bottom
+    m(0.22, 0.80),
+    m(0.09, 0.63),          // into the far flank…
+    m(0.09, 0.40),          // …apex, running straight up
+    m(0.30, 0.36),          // …and out of it, turning wide
+    m(0.62, 0.44),
+    {                       // and gone, easing to their height on the way
       x: clamp(pos.x + out[0] * 1100, b.x1 - 200, b.x2 + 200),
-      y: clamp(pos.y + out[1] * 1100, b.y1 - 200, b.y2 + 200),
+      y: lerp(b.y1 + H * 0.44, pos.y, 0.55),
     },
   ];
-  return pts;
 }
 
-/* position along the waypoint route at 0..1 */
-function alongRoute(pts, t) {
-  const n = pts.length - 1;
-  const f = clamp(t, 0, 1) * n;
-  const i = Math.min(n - 1, Math.floor(f));
-  const k = f - i;
-  const e = k * k * (3 - 2 * k);                 // smooth through each corner
-  return { x: lerp(pts[i].x, pts[i + 1].x, e), y: lerp(pts[i].y, pts[i + 1].y, e) };
+/* ---- turning those waypoints into something actually runnable ----
+
+   The first version walked the waypoints as straight segments and eased
+   *within each one*, which meant the squirrel braked to a dead stop at all
+   eight corners — the stutter. Worse, Felix trailed it by a fixed amount of
+   TIME along the same waypoints, so while it was stopped-and-turning he was
+   still barrelling at where it had been: they met head-on and ran through
+   each other.
+
+   So: the waypoints become one continuous curve, sampled once and then
+   walked by ARC LENGTH. Nothing stops at a corner, the pace is even end to
+   end, and Felix follows a fixed *distance* back down the very same line —
+   which makes overtaking it geometrically impossible. */
+
+/* Centripetal Catmull-Rom (alpha = 0.5). The centripetal flavour matters
+   here: the route deliberately doubles back past the hiker's nose, and the
+   plain uniform version ties itself in a loop at corners that sharp. */
+function crPoint(p0, p1, p2, p3, t) {
+  const knot = (ti, a, b) => ti + Math.sqrt(Math.hypot(b.x - a.x, b.y - a.y));
+  const t0 = 0, t1 = knot(t0, p0, p1), t2 = knot(t1, p1, p2), t3 = knot(t2, p2, p3);
+  if (t1 <= t0 || t2 <= t1 || t3 <= t2) return { x: p1.x, y: p1.y };
+  const tt = t1 + (t2 - t1) * t;
+  const mix = (a, b, ta, tb) => ({
+    x: ((tb - tt) * a.x + (tt - ta) * b.x) / (tb - ta),
+    y: ((tb - tt) * a.y + (tt - ta) * b.y) / (tb - ta),
+  });
+  const A1 = mix(p0, p1, t0, t1), A2 = mix(p1, p2, t1, t2), A3 = mix(p2, p3, t2, t3);
+  const B1 = mix(A1, A2, t0, t2), B2 = mix(A2, A3, t1, t3);
+  return mix(B1, B2, t1, t2);
+}
+
+/* Sample the curve and tabulate cumulative length, so a distance along it
+   can be looked up directly. */
+function buildChasePath(pts) {
+  const last = pts.length - 1;
+  const P = (i) => {
+    // phantom endpoints, so the curve keeps its shape right to the ends
+    if (i < 0) return { x: 2 * pts[0].x - pts[1].x, y: 2 * pts[0].y - pts[1].y };
+    if (i > last) return { x: 2 * pts[last].x - pts[last - 1].x, y: 2 * pts[last].y - pts[last - 1].y };
+    return pts[i];
+  };
+  const SEG = 26;
+  const s = [];
+  for (let i = 0; i < last; i++) {
+    for (let k = 0; k < SEG; k++) s.push(crPoint(P(i - 1), P(i), P(i + 1), P(i + 2), k / SEG));
+  }
+  s.push(pts[last]);
+
+  const cum = [0];
+  for (let i = 1; i < s.length; i++) {
+    cum.push(cum[i - 1] + Math.hypot(s[i].x - s[i - 1].x, s[i].y - s[i - 1].y));
+  }
+  return { s, cum, len: cum[cum.length - 1] };
+}
+
+/* the point `d` pixels along the curve */
+function atDistance(path, d) {
+  const { s, cum, len } = path;
+  d = clamp(d, 0, len);
+  let lo = 0, hi = cum.length - 1;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (cum[mid] <= d) lo = mid; else hi = mid;
+  }
+  const span = cum[hi] - cum[lo];
+  const k = span > 0 ? (d - cum[lo]) / span : 0;
+  return { x: lerp(s[lo].x, s[hi].x, k), y: lerp(s[lo].y, s[hi].y, k) };
+}
+
+/* One even sprint, with just enough ramp at the start that it reads as
+   breaking from cover rather than snapping straight to full speed.
+   Area-matched so it still finishes the curve exactly as the clock runs out. */
+function chasePace(t) {
+  const A = 0.2;
+  const d = t <= A ? (t * t) / (2 * A) : A / 2 + (t - A);
+  return d / (1 - A / 2);
 }
 
 function leaveTheMap() {
-  if (runnerActive || chase || !window.Runner) return;
+  if (runnerActive || chase) return;
+  loadGame("runner").catch(() => {});     // fetches under cover of the chase
+  setCamping(false);          // same for the run: nobody chases a squirrel asleep
   keys.clear();
   target = null;
   edgePush = 0;
@@ -894,11 +1159,119 @@ function leaveTheMap() {
   hideTrailPrompt();
   hiker.classList.remove("walking");
 
-  /* Always sideways. The run only ever leaves through a side edge, and the
-     signpost can fire this with a stale (or vertical) edgeDir. */
-  const out = edgeDir === "left" ? [-1, 0] : [1, 0];
-  chase = { t: 0, route: chaseRoute(out), dogFrom: { x: dogPos.x, y: dogPos.y } };
+  /* Always out the LEFT, which is the run's side of the paper now. Hard-coded
+     rather than read from edgeDir, which the signpost can fire with a stale
+     (or vertical) value. */
+  const out = [-1, 0];
+  const path = buildChasePath(chaseRoute(out));
+  chase = {
+    t: 0,
+    path,
+    gap: clamp(
+      Math.min(path.len * DOG_GAP_F,
+               DOG_GAP_SIDE * Math.min(layout.bounds.x2 - layout.bounds.x1,
+                                       layout.bounds.y2 - layout.bounds.y1)),
+      DOG_GAP_MIN, DOG_GAP_MAX),
+    dogFrom: { x: dogPos.x, y: dogPos.y },
+    sqFlip: out[0] < 0 ? -1 : 1,
+    dogFlip: dogFacing,
+  };
   mapSquirrel.style.display = "";
+}
+
+/* No squirrel out this side. Instead the paper itself slides over to reveal a
+   chair waiting just off the edge, the pair walk to it and get on, and it
+   carries them away — so you're never cut from the map to the game, you just
+   follow them out of it. */
+const skiChair = $("#skiChair");
+const BOARD_MS = 4200, BOARD_PAN = 300;
+let boarding = null;
+
+function setPaperWidth(w) {
+  const v = w == null ? "100%" : w.toFixed(0);
+  for (const id of ["#paperRect", "#dotsRect", "#starsRect"]) $(id).setAttribute("width", v);
+}
+
+function leaveForSki() {
+  if (runnerActive || chase || boarding) return;
+  loadGame("ski").catch(() => {});
+  setCamping(false);          // or they board the lift asleep, zzz and all
+  keys.clear();
+  target = null;
+  edgePush = 0;
+  edgeHint.classList.remove("on");
+  hideTrailPrompt();
+  dropStick();
+  dogMode = "follow";
+  // a teleport onto the seat would otherwise rule one long dash across the map
+  trailPts.length = 0;
+  trailEl.setAttribute("points", "");
+  runnerActive = true;
+  boarding = { t: 0, from: { x: pos.x, y: pos.y }, seatX: layout.bounds.x2 + 96 };
+  skiChair.style.display = "";
+  /* The paper is exactly one viewport wide, so sliding it over would show the
+     page behind it. Widen it for the length of the shot. (Not the grain — it
+     sits at 4% and nobody will miss it in a strip they see for two seconds.) */
+  setPaperWidth(layout.W + BOARD_PAN + 60);
+}
+
+function updateBoarding(dt) {
+  const b = boarding;
+  b.t += dt;
+  const t = clamp(b.t / (BOARD_MS / 1000), 0, 1);
+  const seg = (a, c) => clamp((t - a) / (c - a), 0, 1);
+  const sm = (v) => v * v * (3 - 2 * v);
+  const A = layout.art;
+
+  // the paper slides left to find the chair
+  const pan = sm(seg(0, 0.32)) * BOARD_PAN;
+  const vb = `${pan.toFixed(1)} 0 ${layout.W} ${layout.H}`;
+  world.setAttribute("viewBox", vb);
+  actors.setAttribute("viewBox", vb);
+
+  // it waits, then swings away up the cable
+  const rise = sm(seg(0.74, 1));
+  const cx = b.seatX + rise * layout.W * 1.15;
+  const cy = b.from.y - rise * layout.H * 0.9;
+  place(skiChair, [cx, cy], A);
+
+  const aboard = t >= 0.66;
+  if (!aboard) {
+    const walk = sm(seg(0.28, 0.62));
+    pos.x = lerp(b.from.x, b.seatX - 30 * A, walk);
+    pos.y = lerp(b.from.y, b.from.y, walk);
+    facing = 1;
+    hikerInner.style.transform = "scaleX(1)";
+    hiker.classList.toggle("walking", walk > 0.02 && walk < 0.98);
+    dogFacing = 1;
+    dogPos.x = pos.x - 42 * layout.hik;
+    dogPos.y = pos.y + 4;
+    dogInner.style.transform = "scaleX(1)";
+    dog.classList.toggle("walking", walk > 0.02 && walk < 0.98);
+  } else {
+    // sat on the seat, riding with it
+    document.body.classList.add("boarding");
+    hiker.classList.remove("walking");
+    dog.classList.remove("walking");
+    // sat on the seat itself, which is 29 units up — not floating above it
+    pos.x = cx - 7 * A;
+    pos.y = cy - 29 * A;
+    dogPos.x = cx + 17 * A;
+    dogPos.y = cy - 29 * A;
+  }
+  renderHiker();
+  renderDog();
+
+  if (t > 0.88) chaseFade.classList.add("on");
+  if (t >= 1) {
+    boarding = null;
+    document.body.classList.remove("boarding");
+    world.setAttribute("viewBox", `0 0 ${layout.W} ${layout.H}`);
+    actors.setAttribute("viewBox", `0 0 ${layout.W} ${layout.H}`);
+    skiChair.style.display = "none";
+    setPaperWidth(null);
+    startGame("ski");
+  }
 }
 
 function updateChase(dt) {
@@ -907,20 +1280,25 @@ function updateChase(dt) {
   const dur = CHASE_MS / 1000;
   const t = clamp(chase.t / dur, 0, 1);
 
-  const sq = alongRoute(chase.route, t);
+  const path = chase.path;
+  const d = chasePace(t) * path.len;
+
+  const sq = atDistance(path, d);
   mapSquirrel.setAttribute("transform",
     `translate(${sq.x.toFixed(1)},${sq.y.toFixed(1)}) scale(${(layout.art * 1.15).toFixed(3)})`);
-  // face the way it's going
-  const ahead = alongRoute(chase.route, Math.min(1, t + 0.02));
-  mapSquirrel.style.setProperty("--sq-flip", ahead.x < sq.x ? "-1" : "1");
+  /* face along the tangent, with a deadband so it doesn't flicker back and
+     forth while the curve runs nearly straight up or down */
+  const tan = atDistance(path, Math.min(path.len, d + 10));
+  if (Math.abs(tan.x - sq.x) > 0.6) chase.sqFlip = tan.x < sq.x ? -1 : 1;
+  mapSquirrel.style.setProperty("--sq-flip", chase.sqFlip);
 
-  // Felix runs where it was a moment ago, easing off his start
-  const dogT = clamp((chase.t - 0.34) / (dur - 0.34), 0, 1);
-  const want = alongRoute(chase.route, Math.max(0, dogT - DOG_LAG / dur));
-  const blend = Math.min(1, chase.t / 0.5);
+  // Felix: same curve, a fixed gap back, eased out of wherever he was stood
+  const want = atDistance(path, d - chase.gap);
+  const blend = Math.min(1, chase.t / 0.55);
   const nx = lerp(chase.dogFrom.x, want.x, blend);
   const ny = lerp(chase.dogFrom.y, want.y, blend);
-  if (Math.abs(nx - dogPos.x) > 1.5) dogFacing = nx > dogPos.x ? 1 : -1;
+  if (Math.abs(nx - dogPos.x) > 0.6) chase.dogFlip = nx > dogPos.x ? 1 : -1;
+  dogFacing = chase.dogFlip;
   dogPos.x = nx; dogPos.y = ny;
   dog.classList.add("walking", "running");
   dogInner.style.transform = `scaleX(${dogFacing})`;
@@ -935,61 +1313,96 @@ function updateChase(dt) {
   }
 }
 
-function startRunner() {
-  runnerActive = true;
-  Runner.start({
-    night: document.body.classList.contains("night"),
-    onExit: () => {
-      runnerActive = false;
-      edgePush = 0;
-      edgeDir = null;
-      edgeCooldown = 1.4;
-      hideTrailPrompt();
-      keys.clear();
-      target = null;
-      // set him down well inside the paper, not against the boundary he left by
-      const m = 90;
-      pos.x = clamp(pos.x, layout.bounds.x1 + m, layout.bounds.x2 - m);
-      pos.y = clamp(pos.y, layout.bounds.y1 + m, layout.bounds.y2 - m);
-      crumbs.length = 0;
-      dropStick();
-      dogPos.x = pos.x - layout.leash * facing;
-      dogPos.y = pos.y + 5;
-      renderHiker();
-      renderDog();
-      dog.classList.remove("running");
-      lastT = performance.now();
-      chaseFade.classList.remove("on");
-      updateSignpost();
-    },
-  });
-  // hold the cover a moment so the trail is already drawn behind it
-  setTimeout(() => chaseFade.classList.remove("on"), 260);
+/* Coming back from any game: put the pair down safely inside the paper,
+   not against the boundary they left by, and let the edge settle. */
+function backFromGame() {
+  runnerActive = false;
+  boarding = null;
+  document.body.classList.remove("boarding");
+  skiChair.style.display = "none";
+  setPaperWidth(null);
+  if (layout) {
+    const vb = `0 0 ${layout.W} ${layout.H}`;
+    world.setAttribute("viewBox", vb);
+    actors.setAttribute("viewBox", vb);
+  }
+  edgePush = 0;
+  edgeDir = null;
+  edgeCooldown = 1.4;
+  hideTrailPrompt();
+  keys.clear();
+  target = null;
+  const m = 90;
+  pos.x = clamp(pos.x, layout.bounds.x1 + m, layout.bounds.x2 - m);
+  pos.y = clamp(pos.y, layout.bounds.y1 + m, layout.bounds.y2 - m);
+  crumbs.length = 0;
+  dropStick();
+  dogMode = "follow";                     // he came back with you, not still after the birds
+  chaseGoal = null;
+  chaseUntil = 0;
+  dogPos.x = pos.x - layout.leash * facing;
+  dogPos.y = pos.y + 5;
+  renderHiker();
+  renderDog();
+  dog.classList.remove("running");
+  lastT = performance.now();
+  chaseFade.classList.remove("on");
+  updateSignpost();
 }
 
-/* the keepsake: a signpost at the edge once you've got somewhere */
-const signpost = $("#signpost");
-const signpostText = $("#signpostText");
+function startGame(name) {
+  runnerActive = true;
+  loadGame(name).then((mod) => {
+    mod.start({
+      night: document.body.classList.contains("night"),
+      onExit: backFromGame,
+    });
+    // hold the cover a moment so the trail is already drawn behind it
+    setTimeout(() => chaseFade.classList.remove("on"), 260);
+  }).catch(() => {
+    // offline, or the file's missing: put them back on the paper rather
+    // than leaving the screen covered forever
+    backFromGame();
+  });
+}
+const startRunner = () => startGame("runner");
+
+/* the keepsakes: one signpost per way off the paper, each earned separately
+   and each pointing the way you'd go to beat it */
+const SIGNS = {
+  runner: {
+    el: $("#signpost"), txt: $("#signpostText"), go: () => leaveTheMap(),
+    label: (m) => `Your best walk off the map: ${m} metres. Activate to go again.`,
+  },
+  ski: {
+    el: $("#skiSign"), txt: $("#skiSignText"), go: () => leaveForSki(),
+    label: (m) => `Your best ski run: ${m} metres. Activate to go again.`,
+  },
+};
 
 function updateSignpost() {
-  const best = window.Runner ? Runner.best() : 0;
-  const earned = best >= (window.Runner ? Runner.KEEPSAKE_AT : Infinity);
-  signpost.style.display = earned ? "" : "none";
-  if (!earned) return;
-  signpostText.textContent = `${best} m`;
-  const spot = layout.signpost;
-  if (spot) {
-    signpost.setAttribute("transform",
+  for (const [name, s] of Object.entries(SIGNS)) {
+    const best = bestFor(name);
+    const spot = layout.signposts && layout.signposts[name];
+    /* the display test has to include the spot: compact deliberately has no
+       room for these, and without this an earned board rendered untransformed
+       at the SVG origin */
+    const show = best >= GAMES[name].keepsakeAt && !!spot;
+    s.el.style.display = show ? "" : "none";
+    if (!show) continue;
+    s.txt.textContent = `${best} m`;
+    s.el.setAttribute("transform",
       `translate(${spot.x.toFixed(1)},${spot.y.toFixed(1)}) scale(${layout.art.toFixed(3)})`);
+    s.el.setAttribute("aria-label", s.label(best));
   }
-  signpost.setAttribute("aria-label",
-    `Your best walk off the map: ${best} metres. Activate to go again.`);
 }
 
-signpost.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); leaveTheMap(); });
-signpost.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); leaveTheMap(); }
-});
+for (const s of Object.values(SIGNS)) {
+  s.el.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); s.go(); });
+  s.el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); s.go(); }
+  });
+}
 
 window.onRunFinished = () => updateSignpost();
 
@@ -1119,13 +1532,15 @@ function updateNeedle() {
 /* --- field trip complete --- */
 
 const doneStamp = $("#doneStamp");
+/* Session-only, to match the stamps it pays off. Persisting this while the
+   stamps reset would be the worst of both: a returning visitor re-collects
+   all five and gets nothing at the end for it. */
 let doneShown = false;
-try { doneShown = localStorage.getItem("fieldnotes-done") === "1"; } catch (_) {}
+try { localStorage.removeItem("fieldnotes-done"); } catch (_) {}
 
 function checkComplete() {
   if (doneShown || SECTIONS.some((s) => !visited.has(s))) return;
   doneShown = true;
-  try { localStorage.setItem("fieldnotes-done", "1"); } catch (_) {}
   doneStamp.classList.add("thump");
   setTimeout(() => doneStamp.classList.remove("thump"), 3000);
 }
@@ -1173,7 +1588,16 @@ function petDog() {
   sayT = setTimeout(() => dogSpeak.classList.remove("say"), 1450);
 }
 
-dog.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); petDog(); });
+/* One tap pets him; a second tap inside a blink throws the stick — the same
+   throw the T key does, so touch visitors get that easter egg too. */
+let dogTapAt = 0;
+dog.addEventListener("pointerdown", (e) => {
+  e.preventDefault(); e.stopPropagation();
+  const t = performance.now();
+  if (t - dogTapAt < 340) { dogTapAt = 0; throwStick(); return; }
+  dogTapAt = t;
+  petDog();
+});
 dog.addEventListener("keydown", (e) => {
   if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); petDog(); }
 });
@@ -1196,14 +1620,16 @@ function firstInput() {
    sections, routing, visited stamps
    ------------------------------------------------------------ */
 
+/* Deliberately NOT persisted. A returning visitor arrives with every stamp
+   blank and the whole map worth walking again — the point of the stamps is to
+   pull you round the places you haven't been, and a fully-stamped map on
+   arrival is a map that says you're finished. Session-only keeps the nudge.
+   (Bests are a different thing and do persist: those are yours.) */
 const visited = new Set();
-try {
-  JSON.parse(localStorage.getItem("fieldnotes-visited") || "[]").forEach((s) => visited.add(s));
-} catch (_) { /* private mode etc. — stamps just won't persist */ }
+try { localStorage.removeItem("fieldnotes-visited"); } catch (_) {}
 
 function markVisited(sec, instant = false) {
   visited.add(sec);
-  try { localStorage.setItem("fieldnotes-visited", JSON.stringify([...visited])); } catch (_) {}
   const stamp = $("#lm-" + sec + " .stamp");
   if (!stamp) return;
   if (instant) {
@@ -1217,6 +1643,7 @@ function markVisited(sec, instant = false) {
 
 function openSection(sec) {
   if (!ROUTES.includes(sec)) return;
+  if (runnerActive || chase) return;      // mid-handover the paper is covered, not gone
   if (location.hash === "#/" + sec) { route(); return; }
   location.hash = "#/" + sec;      // route() opens the dialog
 }
@@ -1301,9 +1728,46 @@ $$(".paper-dlg").forEach((dlg) =>
   dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); })
 );
 
+/* The name in the corner. With something open it's the way back to the map;
+   on the bare map it shakes, re-inks itself and tries out another tagline —
+   which wears off after a few seconds and fades back to the real one. */
+const TAGLINES = [
+  "people, places & projects",
+  "have camera, will travel",
+  "will walk for good light",
+  `${SITE.dogName.toLowerCase()} did the scouting`,
+];
+const TAG_WEARS_OFF = 5000;
+let tagIdx = 0, brandT = 0;
+
 $("#brandBtn").addEventListener("click", () => {
+  const wasOpen = anyDialogOpen();
   closeAllDialogs();
   if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+  if (wasOpen) return;                  // that click meant "back to the map"
+
+  const chip = $("#brandBtn");
+  const span = $("#brandBtn span");
+  clearTimeout(brandT);
+  chip.classList.remove("fade");
+
+  tagIdx = (tagIdx % (TAGLINES.length - 1)) + 1;   // cycle the fun ones only
+  span.textContent = TAGLINES[tagIdx];
+  chip.classList.remove("reink");
+  void chip.offsetWidth;                // restart the animation from zero
+  chip.classList.add("reink");
+
+  brandT = setTimeout(() => {
+    /* drop .reink first: its finished animation still pins the span's
+       opacity, and the fade transition would lose to it */
+    chip.classList.remove("reink");
+    chip.classList.add("fade");
+    brandT = setTimeout(() => {
+      tagIdx = 0;
+      span.textContent = TAGLINES[0];
+      chip.classList.remove("fade");
+    }, 420);
+  }, TAG_WEARS_OFF);
 });
 
 /* ------------------------------------------------------------
@@ -1670,8 +2134,8 @@ function setHint() {
   const narrow = innerWidth < 620;
   if (COARSE.matches) {
     hintChip.textContent = narrow
-      ? "tap anywhere to walk"
-      : "tap anywhere to walk · tap a drawing to open it";
+      ? "tap to walk · hold to lead"
+      : "tap to walk, hold to lead · tap a drawing to open it";
   } else if (narrow) {
     hintChip.textContent = "arrow keys to walk · esc for contents";
   }
@@ -1683,7 +2147,6 @@ if (COARSE.matches) {
 setHint();
 
 applyLayout();
-visited.forEach((sec) => markVisited(sec, true));
 updateSignpost();
 try { setNight(localStorage.getItem("fieldnotes-night") === "1", false); } catch (_) {}
 
