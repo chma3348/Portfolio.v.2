@@ -1198,7 +1198,7 @@ window.Runner = (function () {
       let sc = document.querySelector("script[data-alps]");
       if (!sc) {
         sc = document.createElement("script");
-        sc.src = "alps.js"; sc.async = true; sc.dataset.alps = "1";
+        sc.src = "alps.js" + (window.BUILD || ""); sc.async = true; sc.dataset.alps = "1";
         document.head.appendChild(sc);
       }
       sc.addEventListener("load", () => { if (root && !root.hidden) drawFar(); }, { once: true });

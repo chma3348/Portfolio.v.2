@@ -16,7 +16,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Special+Elite&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<!-- ?v= is the build: bump it on every deploy (here, photos.js and game.js —
+     game.js passes it on to everything it loads later). Without it a browser
+     can keep the old page from its cache and fetch the new scripts, and the
+     map never starts. -->
+<link rel="stylesheet" href="styles.css?v=20261102b">
 </head>
 <body>
 <!-- night mode before the first paint, not after game.js — or a returning
@@ -746,8 +750,8 @@
   </button>
 </dialog>
 
-<script src="photos.js"></script>
+<script src="photos.js?v=20261102b"></script>
 <!-- the games are fetched on demand — see loadGame() in game.js -->
-<script src="game.js"></script>
+<script src="game.js?v=20261102b"></script>
 </body>
 </html>

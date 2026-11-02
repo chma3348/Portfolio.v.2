@@ -217,7 +217,7 @@ window.Ski = (function () {
      chair is. Relative to the page, same as ski.js itself. */
   if (!window.Alps && !document.querySelector("script[data-alps]")) {
     const sc = document.createElement("script");
-    sc.src = "alps.js"; sc.async = true; sc.dataset.alps = "1";
+    sc.src = "alps.js" + (window.BUILD || ""); sc.async = true; sc.dataset.alps = "1";
     document.head.appendChild(sc);
   }
 

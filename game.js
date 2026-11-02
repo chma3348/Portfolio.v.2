@@ -9,6 +9,11 @@ const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+/* The build tag index.html loaded this file with (?v=...), passed on to every
+   script fetched later, so a page only ever runs code from its own deploy. */
+const BUILD = (document.currentScript && new URL(document.currentScript.src).search) || "";
+window.BUILD = BUILD;
+
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)");
 const COARSE  = matchMedia("(pointer: coarse)");
 
@@ -980,8 +985,8 @@ let runnerActive = false;
    ------------------------------------------------------------ */
 
 const GAMES = {
-  runner: { src: "runner.js", global: "Runner", bestKey: "fieldnotes-run-best", keepsakeAt: 250 },
-  ski:    { src: "ski.js",    global: "Ski",    bestKey: "fieldnotes-ski-best", keepsakeAt: 150 },
+  runner: { src: "runner.js" + BUILD, global: "Runner", bestKey: "fieldnotes-run-best", keepsakeAt: 250 },
+  ski:    { src: "ski.js" + BUILD,    global: "Ski",    bestKey: "fieldnotes-ski-best", keepsakeAt: 150 },
 };
 
 /* which way off the paper leads where */
@@ -2562,7 +2567,7 @@ function stillRanges(W, H) {
 function loadAlps() {
   if (window.Alps || document.querySelector("script[data-alps]")) return;
   const sc = document.createElement("script");
-  sc.src = "alps.js";
+  sc.src = "alps.js" + BUILD;
   sc.async = true;
   sc.dataset.alps = "1";          // ski.js looks for this and won't fetch it twice
   sc.onload = () => whenIdle(() => { alpsStill = buildAlpsStill(); });

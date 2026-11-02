@@ -825,9 +825,16 @@ endpoint. The About text is in [index.html](index.html).
 
 ## Deploying
 
-Currently set up to run locally only. To put it online you'd add a `CNAME` file
-and a GitHub Pages workflow, the same way `Portfolio-V1.1-main` does it — say
-the word and I'll wire that up.
+The site is live on GitHub Pages at https://chma3348.github.io/Portfolio.v.2/,
+built straight from `main` — push to `main` and it's up a minute later.
+
+**Bump the build tag on every deploy.** In [index.html](index.html), the three
+links to `styles.css`, `photos.js` and `game.js` end in `?v=…` — change it (the
+date and a letter will do) whenever you push. `game.js` passes the same tag on
+to everything it loads later (the two games and `alps.js`). Pages lets browsers
+keep each file for ten minutes, and without the tag a browser could keep the
+old page from its cache while fetching the new scripts — the scripts then look
+for parts of the page that aren't there, and the map never draws.
 
 ## Files
 
