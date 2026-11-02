@@ -16,7 +16,14 @@
    TO CAPTION ONE
      p("Travel-12.jpg", "morning ferry", "Sydney Harbour")
         caption ---^                       ^--- where it was taken
-     Both are optional; without them the viewer just shows the photo.
+     Both are optional and only show in the full-screen viewer: the caption
+     in handwriting, the place in type beside it. Without them the viewer
+     shows the gallery's name.
+
+   TO SHOW ONE BIG
+     Add its file name to that gallery's `featured` list. Featured photos
+     take two columns, and one of them (picked at random) leads the page.
+     Landscape-shaped photos work best; three to five per gallery is plenty.
 
    TO REMOVE ONE
      Delete its line. Nothing else needs changing.
@@ -51,6 +58,7 @@ const SITE = {
       title: "Peaks & Wilds",
       pageNo: 12,
       blurb: "Landscapes — mountains, high country, and the light that made me stop walking.",
+      featured: ["Landscape-28.jpg", "Landscape-15.jpg", "Landscape-34.jpg", "Landscape-33.jpg"],
       photos: [
         p("Landscape-01.jpg"),
         p("Landscape-02.jpg"),
@@ -94,6 +102,7 @@ const SITE = {
       title: "Journeys",
       pageNo: 24,
       blurb: "Travel — roads, ranges and rooftops, from the Rockies to the Himalaya.",
+      featured: ["Travel-01.jpg", "Travel-33.jpg", "Travel-43.jpg", "Travel-51.jpg"],
       photos: [
         p("Travel-01.jpg"),
         p("Travel-02.jpg"),
@@ -154,6 +163,7 @@ const SITE = {
       title: "Good Company",
       pageNo: 36,
       blurb: "People — the ones who came along, and the ones I met on the way.",
+      featured: ["Portrait-03.jpg", "Portrait-12.jpg", "Portrait-30.jpg", "Portrait-21.jpg"],
       photos: [
         p("Portrait-01.jpg"),
         p("Portrait-02.jpg"),

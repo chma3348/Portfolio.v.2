@@ -35,6 +35,7 @@ SITE.collections.everything = {
   title: "The Whole Lot",
   blurb: "every photograph on this site, shuffled.",
   photos: SECTIONS.flatMap((s) => SITE.collections[s]?.photos || []),
+  featured: SECTIONS.flatMap((s) => SITE.collections[s]?.featured || []),
 };
 
 const GALLERIES = ["peaks", "journeys", "portraits", "everything"];
@@ -88,7 +89,7 @@ const ARRANGE = {
     decor: {
       compass: [0.855, 0.150],
       sun:     [0.120, 0.365],
-      birds:   [0.870, 0.520],
+      birds:   [0.560, 0.900],   // bottom-centre: clear of the boarding pan AND the contents pill
     },
     signposts: { runner: [0.062, 0.885], ski: [0.938, 0.795] },
   },
@@ -462,6 +463,7 @@ function keyVector() {
 }
 
 let lastT = performance.now();
+const fullCover = $$(".gallery-dlg, .lightbox");
 function tick(now) {
   const dt = Math.min((now - lastT) / 1000, 0.05);
   lastT = now;
@@ -472,8 +474,14 @@ function tick(now) {
   // the map idles while you're off running
   if (runnerActive) { requestAnimationFrame(tick); return; }
 
+  // …and they ski back on when you're done
+  if (arriving) { updateArrival(dt); requestAnimationFrame(tick); return; }
+
   // …but the squirrel chase plays out on the map first
   if (chase) { updateChase(dt); requestAnimationFrame(tick); return; }
+
+  // nothing to draw under a gallery or the photo viewer: they cover the whole map
+  if (fullCover.some((d) => d.open)) { requestAnimationFrame(tick); return; }
 
   let moved = false;
   let stepped = 0;
@@ -584,6 +592,10 @@ addEventListener("keydown", (e) => {
   /* a game owns the screen while it's up; only its own keys count, or Escape
      out of the runner also opens Contents on top of it */
   if (runnerActive || chase) return;
+  /* the browser's shortcuts aren't walking: Cmd+D bookmarking walked him
+     right — and macOS never sends the keyup for a key released while Cmd is
+     down, so he kept walking off the edge and onto the ski lift */
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
 
   const dir = KEYMAP[e.key];
   if (dir) {
@@ -605,6 +617,7 @@ addEventListener("keydown", (e) => {
 });
 
 addEventListener("keyup", (e) => {
+  if (e.key === "Meta") { keys.clear(); return; }   // keyups swallowed while it was held
   const dir = KEYMAP[e.key];
   if (dir) keys.delete(dir);
 });
@@ -987,6 +1000,9 @@ function loadGame(name) {
     el.async = true;
     el.onload = () => (window[g.global] ? resolve(window[g.global]) : reject(new Error(g.src)));
     el.onerror = () => reject(new Error(g.src));
+    /* a stalled connection neither loads nor errors, and the cover would
+       stay up with every input ignored — give up and put them back */
+    setTimeout(() => reject(new Error(g.src + " timed out")), 12000);
     document.head.appendChild(el);
   });
   gameLoads[name] = p;
@@ -1013,6 +1029,85 @@ function bestFor(name) {
 
 const mapSquirrel = $("#mapSquirrel");
 const chaseFade = $("#chaseFade");
+
+/* The cloud bank the chair climbs into, and the ski run opens out of — so
+   the trip from paper to mountain reads as one journey, not a fade to white.
+   Puffs roll in from the right (the way the chair travels) and out to the
+   left. Used for both directions and for the quick wipe on "go again". */
+const cloudWipe = (() => {
+  const el = $("#cloudWipe");
+  const svg = el.querySelector("svg.cw-sky");
+  let k = 0;
+  const rnd = () => { const v = Math.sin(++k * 91.17) * 43758.5453; return v - Math.floor(v); };
+  const f = (n) => n.toFixed(1);
+  /* Real cumulus, not a wall of circles: each cloud is a flat base with
+     puffs piled up on top — biggest in the middle — outlined in ink only
+     on its outside (ink discs under paper discs), clipped flat along the
+     bottom, with a soft shadow on its underside and a pencil base line.
+     They roll in at different speeds over a rising mist, and keep drifting
+     while you're inside, so it reads as flying through cloud. */
+  let html = "", id = 0;
+  for (let row = 0; row < 6; row++) {
+    const by = 14 + row * 19 + (rnd() - 0.5) * 4;
+    for (let col = -1; col < 3; col++) {
+      const w = 54 + rnd() * 30;
+      const cx = col * 58 + (row % 2) * 29 + 20 + (rnd() - 0.5) * 12;
+      const n = 4 + Math.floor(rnd() * 3);
+      let inkC = "", papC = "";
+      for (let i = 0; i < n; i++) {
+        const u = (i + 0.5) / n, mid = 1 - Math.abs(u - 0.5) * 2;
+        const r = w * (0.12 + 0.12 * mid) * (0.85 + rnd() * 0.3);
+        const x = cx - w / 2 + w * u + (rnd() - 0.5) * 3;
+        const y = by - r * (0.55 + 0.35 * mid);
+        inkC += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r + 0.6)}"/>`;
+        papC += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}"/>`;
+      }
+      const x0 = cx - w / 2 - 2, x1 = cx + w / 2 + 2;
+      const fd = (0.4 * (1 - (cx + 40) / 220) + 0.1 * (row / 6) + rnd() * 0.08).toFixed(3);
+      const fq = (0.4 * ((cx + 40) / 220) + rnd() * 0.1).toFixed(3);
+      const sp = 0.8 + rnd() * 0.5;      // parallax: some travel further, some less
+      const vars = `--px:${(200 * sp).toFixed(0)}px;--py:${(-30 - rnd() * 30).toFixed(0)}px;` +
+                   `--qx:${(-200 * sp).toFixed(0)}px;--qy:${(20 + rnd() * 25).toFixed(0)}px;` +
+                   `--fd:${fd};--fq:${fq};--dr:${(4 + rnd() * 6).toFixed(1)}px`;
+      html += `<clipPath id="cwc${id}"><rect x="${f(x0 - 30)}" y="-200" width="${f(x1 - x0 + 60)}" height="${f(by + 200)}"/></clipPath>` +
+        `<g class="cw-cloud" style="${vars}"><g class="cw-drift"><g clip-path="url(#cwc${id})">` +
+        `<g class="cw-ink">${inkC}</g><g class="cw-paper">${papC}</g>` +
+        `<ellipse class="cw-shade" cx="${f(cx)}" cy="${f(by - 1)}" rx="${f(w * 0.48)}" ry="${f(w * 0.09)}"/>` +
+        `</g><path class="cw-base" d="M${f(x0 + 6)},${f(by)} L${f(x1 - 6)},${f(by)}"/></g></g>`;
+      id++;
+    }
+  }
+  svg.innerHTML = html;
+  let covered = false, token = 0;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  function cover(ms = 1700) {
+    const my = ++token;
+    el.style.setProperty("--cw-ms", ms + "ms");
+    el.classList.add("cw-on", "cw-snap");
+    el.classList.remove("cw-cover", "cw-post", "cw-full");
+    void el.offsetWidth;
+    el.classList.remove("cw-snap");
+    el.classList.add("cw-cover");
+    covered = true;
+    setTimeout(() => { if (my === token) el.classList.add("cw-full"); }, ms * 0.8);
+    return wait(ms + 120);
+  }
+  function clear(ms = 2100) {
+    if (!covered) return Promise.resolve();
+    const my = ++token;
+    covered = false;
+    el.style.setProperty("--cw-ms", ms + "ms");
+    el.classList.remove("cw-full", "cw-cover");
+    el.classList.add("cw-post");
+    return wait(ms + 150).then(() => {
+      if (my !== token) return;
+      el.classList.add("cw-snap");
+      el.classList.remove("cw-post", "cw-on");
+    });
+  }
+  return { cover, clear, get covered() { return covered; } };
+})();
+window.cloudWipe = cloudWipe;
 const CHASE_MS = 5200;
 /* How far behind it he runs. Not a flat pixel count: what decides whether he
    ends up nose-to-nose with it is how much *curve* sits between them, so the
@@ -1149,7 +1244,7 @@ function chasePace(t) {
 }
 
 function leaveTheMap() {
-  if (runnerActive || chase) return;
+  if (runnerActive || chase || arriving) return;
   loadGame("runner").catch(() => {});     // fetches under cover of the chase
   setCamping(false);          // same for the run: nobody chases a squirrel asleep
   keys.clear();
@@ -1189,11 +1284,12 @@ let boarding = null;
 
 function setPaperWidth(w) {
   const v = w == null ? "100%" : w.toFixed(0);
-  for (const id of ["#paperRect", "#dotsRect", "#starsRect"]) $(id).setAttribute("width", v);
+  for (const id of ["#paperRect", "#dotsRect", "#starsRect", "#grainRect"]) $(id).setAttribute("width", v);
 }
 
 function leaveForSki() {
-  if (runnerActive || chase || boarding) return;
+  // not mid-ski-in either: he boarded still in his skiing pose
+  if (runnerActive || chase || boarding || arriving) return;
   loadGame("ski").catch(() => {});
   setCamping(false);          // or they board the lift asleep, zzz and all
   keys.clear();
@@ -1210,8 +1306,8 @@ function leaveForSki() {
   boarding = { t: 0, from: { x: pos.x, y: pos.y }, seatX: layout.bounds.x2 + 96 };
   skiChair.style.display = "";
   /* The paper is exactly one viewport wide, so sliding it over would show the
-     page behind it. Widen it for the length of the shot. (Not the grain — it
-     sits at 4% and nobody will miss it in a strip they see for two seconds.) */
+     page behind it. Widen it for the length of the shot — ALL of it, grain
+     included: it's only 4%, but a strip without it is visibly whiter. */
   setPaperWidth(layout.W + BOARD_PAN + 60);
 }
 
@@ -1262,16 +1358,179 @@ function updateBoarding(dt) {
   renderHiker();
   renderDog();
 
-  if (t > 0.88) chaseFade.classList.add("on");
+  // the chair climbs into the cloud bank as it lifts away; the ski run opens out of it
+  if (t > 0.7 && !b.clouded) { b.clouded = true; b.inCloud = cloudWipe.cover(1700); }
   if (t >= 1) {
+    const inCloud = b.inCloud || Promise.resolve();
     boarding = null;
     document.body.classList.remove("boarding");
     world.setAttribute("viewBox", `0 0 ${layout.W} ${layout.H}`);
     actors.setAttribute("viewBox", `0 0 ${layout.W} ${layout.H}`);
     skiChair.style.display = "none";
     setPaperWidth(null);
-    startGame("ski");
+    // switch only once we're properly inside the cloud
+    inCloud.then(() => startGame("ski"));
   }
+}
+
+/* ---------- skiing back onto the map ----------
+   The run ends by handing you back to the paper, and a hiker who simply
+   materialises where he left is the same jump-cut the boarding scene exists
+   to avoid. He comes back in from the side he left by, on skis, with Felix
+   running alongside him rather than trailing on the leash. */
+const ARRIVE_MS = 1900;
+let arriving = null;
+
+function startArrival(wait = 0) {
+  if (!layout) return;
+  setCamping(false);          // nobody skis in sitting cross-legged by a tent
+  /* All the way to the middle of the paper, not just over the edge — coming
+     to rest in the margin reads as stopping because the screen ran out.
+     layout.start is the map's own "you are here", so it's both centre-screen
+     and a sensible place to be left standing. */
+  /* If the ski signpost is up, he skis to IT — glides to a stop beside the
+     post, leans his skis against it, and walks the rest of the way. The
+     skis just appearing on the sign meant nothing; watching him put them
+     there is what makes it a keepsake. No signpost yet (under 150 m), and
+     he skis all the way to the middle as before. */
+  const spot = layout.signposts && layout.signposts.ski;
+  const toSign = !!spot && $("#skiSign").style.display !== "none";
+  if (toSign) {
+    const A = layout.art;
+    // the near side of the post: the sign sits right by the edge, past it there's no room
+    const tx = spot.x - 36 * A, ty = clamp(spot.y + 28 * A, layout.bounds.y1, layout.bounds.y2);
+    skiSignSkis.style.display = "none";           // he's still wearing them
+    /* A carve, not a straight line: in from the right, a swoop up and round
+       to the left, and back down into the stop moving TOWARDS the post — a
+       little show of actually skiing, ending facing the thing he's about to
+       lean his skis on. Kept inside the paper's bounds. */
+    // sized from the SCREEN, not the drawing scale — tied to the art it was a 150 px wiggle
+    const W = layout.W, H = layout.H;
+    const yTop = Math.max(layout.bounds.y1 + 20, ty - 0.34 * H);
+    const xLeft = Math.max(layout.bounds.x1 + 20, tx - 0.36 * W);
+    const path = [[layout.bounds.x2 + 130, Math.max(layout.bounds.y1 + 20, ty - 0.24 * H)],
+                  [tx - 0.06 * W, yTop], [xLeft, ty + 0.02 * H], [tx, ty]];
+    arriving = { t: 0, fromX: path[0][0], fromY: path[0][1], toX: tx, toY: ty, toSign: true, path,
+                 ms: 2700 };
+  } else {
+    arriving = { t: 0, fromX: layout.bounds.x2 + 130, fromY: pos.y,
+                 toX: layout.start.x, toY: layout.start.y };
+  }
+  /* held just off the paper until the cloud has mostly parted, so the
+     whole carve is on show rather than its last few metres */
+  arriving.wait = wait;
+  pos.x = arriving.fromX;
+  pos.y = arriving.fromY;
+  facing = -1;                       // he came off the hill, so he's heading back in
+  dogFacing = -1;
+  document.body.classList.add("arriving");
+  hikerInner.style.transform = "scaleX(-1)";
+  dogInner.style.transform = "scaleX(-1)";
+  hiker.classList.remove("walking");   // he's gliding, not walking
+  dog.classList.add("walking");        // Felix very much is not gliding
+  dogPos.x = pos.x + 36 * layout.hik;
+  dogPos.y = arriving.toY + 6;
+  renderHiker();
+  renderDog();
+}
+
+/* Home again: Felix shakes the snow off, the skis go up against the
+   signpost, and if it was a new best the number on it gets stamped over. */
+let arrivalNewBest = false;
+const skiSignSkis = $("#skiSignSkis");
+function afterArrival(toSign) {
+  // the skis come off and go up against the post, right where he's standing
+  if (toSign) {
+    // he turns round to the post to lean them on it
+    facing = 1; hikerInner.style.transform = "scaleX(1)";
+    try { localStorage.setItem("fieldnotes-ski-planted", "1"); } catch (_) {}
+    skiSignSkis.style.display = "";
+    skiSignSkis.classList.remove("planting"); void skiSignSkis.getBoundingClientRect();
+    skiSignSkis.classList.add("planting");
+  }
+  setTimeout(() => {
+    dog.classList.remove("shaking"); void dog.getBoundingClientRect();
+    dog.classList.add("shaking");
+    setTimeout(() => dog.classList.remove("shaking"), 700);
+  }, toSign ? 380 : 0);
+  let linger = toSign ? 1100 : 0;
+  if (arrivalNewBest) {
+    arrivalNewBest = false;
+    const sign = $("#skiSign");
+    setTimeout(() => {
+      sign.classList.remove("sp-stamp"); void sign.getBoundingClientRect();
+      sign.classList.add("sp-stamp");
+      setTimeout(() => sign.classList.remove("sp-stamp"), 3200);
+    }, toSign ? 650 : 1000);
+    if (toSign) linger = 1900;           // stay to see the number stamped
+  }
+  // then on to the middle of the paper, on foot, Felix on the leash again
+  if (toSign) setTimeout(() => {
+    if (!arriving && !runnerActive && !target && !keyVector()[0] && !keyVector()[1])
+      target = { x: layout.start.x, y: layout.start.y };
+  }, linger);
+}
+try { if (localStorage.getItem("fieldnotes-ski-planted") === "1") skiSignSkis.style.display = ""; } catch (_) {}
+
+function endArrival() {
+  if (!arriving) return;
+  const toSign = !!arriving.toSign;
+  setTimeout(() => afterArrival(toSign), 60);
+  pos.x = arriving.toX;
+  pos.y = arriving.toY;
+  dropCrumb(pos.x, pos.y);       // give the leash a point to hang off
+  arriving = null;
+  document.body.classList.remove("arriving");
+  hiker.classList.remove("walking");
+  dog.classList.remove("walking");
+  dogPos.x = pos.x - layout.leash * facing;
+  dogPos.y = pos.y + 5;
+  renderHiker();
+  renderDog();
+}
+
+function updateArrival(dt) {
+  const a = arriving;
+  // any input at all takes the wheel — this can never be something to sit through
+  const [kx, ky] = keyVector();
+  if (kx || ky || target) { endArrival(); return; }
+  if (a.wait > 0) { a.wait -= dt; return; }
+
+  a.t += dt;
+  const t = clamp(a.t / ((a.ms || ARRIVE_MS) / 1000), 0, 1);
+  if (a.path) {
+    /* along the carve: quick in, easing into the stop; he faces the way
+       he's travelling, so he turns through the bottom of the arc, and
+       Felix runs the same line a beat behind */
+    const bez = (q, u) => { const v = 1 - u; return [
+      v * v * v * q[0][0] + 3 * v * v * u * q[1][0] + 3 * v * u * u * q[2][0] + u * u * u * q[3][0],
+      v * v * v * q[0][1] + 3 * v * v * u * q[1][1] + 3 * v * u * u * q[2][1] + u * u * u * q[3][1]]; };
+    const e = 1 - Math.pow(1 - t, 1.9);
+    const [nx, ny] = bez(a.path, e);
+    const dx = nx - pos.x;
+    if (Math.abs(dx) > 0.3) {
+      facing = dx > 0 ? 1 : -1;
+      hikerInner.style.transform = `scaleX(${facing})`;
+    }
+    pos.x = nx; pos.y = ny;
+    const [fx, fy] = bez(a.path, Math.max(0, e - 0.09));
+    if (Math.abs(fx - dogPos.x) > 0.3) {
+      dogFacing = fx > dogPos.x ? 1 : -1;
+      dogInner.style.transform = `scaleX(${dogFacing})`;
+    }
+    dogPos.x = fx; dogPos.y = fy + 6;
+  } else {
+    const e = 1 - Math.pow(1 - t, 2.6);          // comes in fast, settles gently
+    pos.x = lerp(a.fromX, a.toX, e);
+    pos.y = lerp(a.fromY, a.toY, e);
+    /* He closes up as they slow: level with him at speed, tucked in beside him
+       once they stop. */
+    dogPos.x = pos.x + lerp(36, 26, e) * layout.hik;
+    dogPos.y = pos.y + 6;
+  }
+  renderHiker();
+  renderDog();
+  if (t >= 1) endArrival();
 }
 
 function updateChase(dt) {
@@ -1315,6 +1574,9 @@ function updateChase(dt) {
 
 /* Coming back from any game: put the pair down safely inside the paper,
    not against the boundary they left by, and let the edge settle. */
+/* which run we're coming back from — only the ski run skis back on */
+let lastGame = null;
+
 function backFromGame() {
   runnerActive = false;
   boarding = null;
@@ -1346,11 +1608,38 @@ function backFromGame() {
   renderDog();
   dog.classList.remove("running");
   lastT = performance.now();
-  chaseFade.classList.remove("on");
   updateSignpost();
+
+  if (lastGame === "ski") {
+    /* The ski run whitens out before it hands back, so the cover has to be
+       already up in THIS frame — a transitioned fade-in would show the map
+       through the seam. Put it up with the transition off, then let it fade
+       away over the arrival. */
+    arrivalNewBest = bestFor("ski") > bestBefore;
+    if (cloudWipe.covered) {
+      // the run closed into the cloud bank; the map opens out of it
+      chaseFade.classList.remove("on");
+      // the cloud parts first, THEN he skis in — not hidden behind it
+      startArrival(1.5);
+      cloudWipe.clear(2200);
+    } else {
+      chaseFade.classList.add("instant", "on");
+      void chaseFade.offsetWidth;
+      chaseFade.classList.remove("instant");
+      startArrival();
+      requestAnimationFrame(() => chaseFade.classList.remove("on"));
+    }
+  } else {
+    chaseFade.classList.remove("on");
+  }
+  lastGame = null;
 }
 
+let bestBefore = 0;
+
 function startGame(name) {
+  lastGame = name;
+  bestBefore = bestFor(name);
   runnerActive = true;
   loadGame(name).then((mod) => {
     mod.start({
@@ -1359,6 +1648,8 @@ function startGame(name) {
     });
     // hold the cover a moment so the trail is already drawn behind it
     setTimeout(() => chaseFade.classList.remove("on"), 260);
+    // a beat inside the cloud, then it parts and the chair rides out of it
+    if (name === "ski") setTimeout(() => cloudWipe.clear(2200), 450);
   }).catch(() => {
     // offline, or the file's missing: put them back on the paper rather
     // than leaving the screen covered forever
@@ -1540,6 +1831,10 @@ try { localStorage.removeItem("fieldnotes-done"); } catch (_) {}
 
 function checkComplete() {
   if (doneShown || SECTIONS.some((s) => !visited.has(s))) return;
+  /* The fifth visit opens that section's dialog, and the stamp used to
+     thump away underneath it, unseen. Wait till it's closed. */
+  const open = $("dialog[open]");
+  if (open) { open.addEventListener("close", () => setTimeout(checkComplete, 300), { once: true }); return; }
   doneShown = true;
   doneStamp.classList.add("thump");
   setTimeout(() => doneStamp.classList.remove("thump"), 3000);
@@ -1553,7 +1848,7 @@ addEventListener("keydown", (e) => {
   if (anyDialogOpen()) return;
   const k = e.key.toLowerCase();
 
-  if (k === "t") { e.preventDefault(); throwStick(); return; }
+  if (k === "t") { if (!busy() && !arriving) { e.preventDefault(); throwStick(); } return; }
 
   typed = (typed + k).slice(-4);
   if (typed === "woof") { typed = ""; petDog(); }
@@ -1641,9 +1936,13 @@ function markVisited(sec, instant = false) {
   }
 }
 
+/* a game, or the hand-over into or out of one, owns the screen */
+function busy() { return !!(runnerActive || chase || boarding); }
+
 function openSection(sec) {
   if (!ROUTES.includes(sec)) return;
-  if (runnerActive || chase) return;      // mid-handover the paper is covered, not gone
+  if (busy()) return;      // mid-handover the paper is covered, not gone
+  if (arriving) endArrival();             // skiing in can be cut short; it'd fight the dialog
   if (location.hash === "#/" + sec) { route(); return; }
   location.hash = "#/" + sec;      // route() opens the dialog
 }
@@ -1655,16 +1954,26 @@ function closeAllDialogs() {
 function route() {
   const sec = location.hash.replace(/^#\//, "");
   if (!ROUTES.includes(sec)) { closeAllDialogs(); return; }
+  if (busy()) return;                     // Back/Forward mid-game: not over the top of it
+  if (arriving) endArrival();
 
   keys.clear(); target = null;
   hiker.classList.remove("walking");
-  $$("dialog[open]").forEach((d) => { if (d.id !== "dlg-" + sec) d.close(); });
   const dlg = $("#dlg-" + sec);
+  const scene = dlg.open ? null : sceneFor(sec);   // before the others close
+  const sheetScene = dlg.open ? null : sheetSceneFor(sec);
+  $$("dialog[open]").forEach((d) => { if (d.id !== "dlg-" + sec) d.close(); });
   if (!dlg.open) {
+    if (scene) dlg.classList.add("fx", "arriving", "dusk");
+    if (sheetScene) dlg.classList.add("fx");
     /* open first, build second: the mosaic measures the grid's real width,
        and a closed <dialog> is display:none — it measures 0 */
     dlg.showModal();
-    if (GALLERIES.includes(sec)) buildGallery(sec);
+    if (GALLERIES.includes(sec)) {
+      buildGallery(sec);
+      if (scene) playIn(sec, scene);
+      else { dlg.classList.add("shown"); revealGallery(sec); }
+    } else if (sheetScene) playSheet(dlg, sheetScene);
   }
 
   if (SECTIONS.includes(sec)) {
@@ -1790,6 +2099,8 @@ const CONTENTS_ORDER =
 
 function openContents() {
   if (contentsDlg.open) { contentsDlg.close(); return; }
+  if (busy()) return;
+  if (arriving) endArrival();
   const list = $("#contentsList");
   list.innerHTML = "";
   for (const sec of CONTENTS_ORDER) {
@@ -1835,17 +2146,856 @@ function shuffle(a) {
 const STAGGER_MS = 80;
 const revealTimers = {};
 
+/* ---------- the pages around the photos ----------
+   Every gallery is a page of the same notebook as the map, after dark: the
+   landmark you walked into is drawn at the top in the map's own pen, a bar
+   with its icon follows you down, and your trail leads on to the next page.
+   Built once, from the map's landmark drawings themselves. */
+
+const GAL_ART = {
+  // viewBox for the big drawing, a tight one for the icon, and where the
+  // "been here" stamp lands (x, y, tilt)
+  peaks:      { vb: "-110 -96 240 156", icon: "-100 -64 182 116", stamp: [98, -62, -12] },
+  journeys:   { vb: "-110 -96 240 156", icon: "-104 -58 214 116", stamp: [104, -66, 9] },
+  portraits:  { vb: "-120 -84 240 156", icon: "-44 -46 92 116",   stamp: [80, -52, -10] },
+  everything: { vb: "-120 -78 240 156", icon: "-50 -50 100 100",  stamp: null },
+};
+const GAL_NEXT = { peaks: "journeys", journeys: "portraits", portraits: "everything", everything: null };
+
+/* The Whole Lot has no landmark; it gets the compass from the map's corner. */
+const COMPASS_ART = `
+  <circle class="ink thin" r="46"/>
+  <circle class="ink hairline" r="37" stroke-dasharray="1 7"/>
+  <path class="ink hairline" d="M0,-46 L8,0 L0,46 L-8,0 Z"/>
+  <path class="ink hairline" d="M-46,0 L0,8 L46,0 L0,-8 Z"/>
+  <path class="crimson-fill" d="M0,-33 L7,0 L-7,0 Z"/>`;
+
+function galArt(sec) {
+  return sec === "everything" ? COMPASS_ART : $(`#lm-${sec} .lm-art`).innerHTML;
+}
+/* a drawing in the map's pen, at any size: --k keeps the line weight */
+function galDrawing(sec, cls, vb, filter, k) {
+  return `<svg class="${cls} gal-pen" viewBox="${vb}" style="--k:${k}" aria-hidden="true">
+    <g filter="url(#${filter})">${galArt(sec)}</g></svg>`;
+}
+
+const ARROW_D = "M32 10.6 C24 10.2 14 10 4 10.5 M10.5 3.5 C8.5 6 6.4 8.4 3.6 10.5 C6.2 12.6 8.4 14.8 10.8 17.4";
+const TRAIL_D = "M210 0 C210 40 120 48 140 92 C160 136 300 110 260 160 C248 175 222 180 210 190";
+
+const galUI = {};
+
+function dressGallery(sec) {
+  const dlg = $("#dlg-" + sec);
+  const col = SITE.collections[sec];
+  const art = GAL_ART[sec];
+  const head = dlg.querySelector(".gal-open");
+  const words = head.querySelector(".gal-words");
+  const page = CONTENTS_META[sec].page;
+
+  // the bar
+  const iconK = (2 / 4.4) * (+art.icon.split(" ")[3] / 26);
+  head.insertAdjacentHTML("beforebegin", `
+    <div class="gal-bar">
+      <button class="gal-back" type="button" aria-label="Back to the map">
+        <svg viewBox="0 0 34 20" aria-hidden="true"><g filter="url(#roughen-sm)"><path class="mark" d="${ARROW_D}"/></g></svg>
+        the map
+      </button>
+      <span class="gal-bar-title" aria-hidden="true">
+        ${galDrawing(sec, "gal-icon", art.icon, "roughen", iconK.toFixed(2))}${col.title}
+      </span>
+      <span class="gal-bar-meta"><span class="m-page">p.${page}</span><span class="m-prog" aria-hidden="true"></span></span>
+      <svg class="gal-rule" viewBox="0 0 1000 8" preserveAspectRatio="none" aria-hidden="true">
+        <path class="mark" pathLength="1" d="M0 4 C120 3 210 5.5 330 4.2 S560 2.6 690 4.4 S900 5.2 1000 3.6"/>
+      </svg>
+    </div>`);
+
+  // the opening: underline, count, the landmark drawn in, "start here"
+  words.querySelector(".gal-title").insertAdjacentHTML("afterend", `
+    <svg class="gal-uline draw" viewBox="0 0 360 22" aria-hidden="true">
+      <path class="mark ink" pathLength="1" style="--d:500ms" d="M4 12 C80 19 200 15 356 9"/>
+    </svg>`);
+  words.insertAdjacentHTML("beforeend", `<p class="gal-meta"></p>`);
+  const stamp = art.stamp ? `
+    <g class="gal-stamp" transform="translate(${art.stamp[0]},${art.stamp[1]}) rotate(${art.stamp[2]})">
+      <circle r="24"/><text y="-2">been</text><text y="11">here</text>
+    </g>` : "";
+  head.insertAdjacentHTML("beforeend",
+    galDrawing(sec, "gal-art draw", art.vb, "roughen-lg", 0.75).replace("</svg>", stamp + "</svg>") + `
+    <div class="gal-here" aria-hidden="true">
+      <svg viewBox="0 0 40 44"><g filter="url(#roughen-sm)">
+        <path class="mark" d="M6 4 C8 18 16 30 30 38"/><path class="mark" d="M21 38.5 L30.5 38.5 L28 29.5"/>
+      </g></svg>
+      <span>start here</span>
+    </div>`);
+  // dotted lines (the flight path) keep their dots and just appear
+  head.querySelectorAll(".gal-art .ink:not([stroke-dasharray])").forEach((el, i) => {
+    el.setAttribute("pathLength", "1");
+    el.style.setProperty("--d", i * 140 + "ms");
+  });
+
+  // the end: your trail, on to the next page
+  const next = GAL_NEXT[sec];
+  const all = SITE.collections.everything.photos.length;
+  const nextBlock = next ? `
+    <button class="gal-next" type="button" data-next="${next}">
+      ${galDrawing(next, "gal-next-art", GAL_ART[next].vb, "roughen", 1)}
+      <span class="gal-next-kick">next page · p.${CONTENTS_META[next].page}</span>
+      <span class="gal-next-name">${SITE.collections[next].title}</span>
+      <svg class="gal-uline" viewBox="0 0 150 14" aria-hidden="true"><path class="mark" pathLength="1" d="M4 6 C40 12 110 9 146 5"/></svg>
+      <span class="gal-next-blurb">${SITE.collections[next].blurb}</span>
+    </button>` : `
+    <button class="gal-next" type="button" data-map>
+      <span class="gal-next-kick">that's the lot</span>
+      <span class="gal-next-name">Back to the map</span>
+      <svg class="gal-uline" viewBox="0 0 150 14" aria-hidden="true"><path class="mark" pathLength="1" d="M4 6 C40 12 110 9 146 5"/></svg>
+    </button>`;
+  const links = next ? `
+    <nav class="gal-links" aria-label="Elsewhere">
+      <button type="button" data-map>← back to the map</button>
+      ${sec === "everything" || next === "everything" ? "" :
+        `<button type="button" data-next="everything">the whole lot — all ${all} photographs →</button>`}
+    </nav>` : "";
+  dlg.insertAdjacentHTML("beforeend", `
+    <footer class="gal-end">
+      <svg class="gal-trail" viewBox="0 0 420 190" aria-hidden="true">
+        <defs><mask id="trail-${sec}" maskUnits="userSpaceOnUse"><path pathLength="1" d="${TRAIL_D}"/></mask></defs>
+        <path class="walked" mask="url(#trail-${sec})" d="${TRAIL_D}"/>
+      </svg>
+      ${nextBlock}${links}
+    </footer>`);
+
+  dlg.querySelector(".gal-back").addEventListener("click", () => dlg.close());
+  dlg.querySelectorAll(".gal-end [data-map]").forEach((b) => b.addEventListener("click", () => dlg.close()));
+  dlg.querySelectorAll(".gal-end [data-next]").forEach((b) =>
+    b.addEventListener("click", () => openSection(b.dataset.next)));
+  dlg.insertAdjacentHTML("afterbegin", `<div class="gal-night" aria-hidden="true"></div>`);
+
+  const ui = galUI[sec] = {
+    dlg, head,
+    bar:  dlg.querySelector(".gal-bar"),
+    prog: dlg.querySelector(".m-prog"),
+    meta: dlg.querySelector(".gal-meta"),
+    grid: dlg.querySelector(".gal-grid"),
+    end:  dlg.querySelector(".gal-end"),
+    night: dlg.querySelector(".gal-night"),
+  };
+  dlg.addEventListener("scroll", () => galScrolled(ui, sec), { passive: true });
+  wireScenes(sec);
+}
+
+/* ---------- the way in: each gallery's own little scene ----------
+   Opening a gallery from the map plays a short scene drawn from that
+   section's own subject, in the map's pen — then the page fades up around
+   it. Closing plays it back the other way. Any click or key skips to the
+   end; reduced motion, and deep links straight to a gallery, open plainly.
+   The scenes themselves are further down (peaksScene and friends). */
+
+/* the scene a gallery should play as it opens, or null to open plainly */
+function sceneFor(sec) {
+  if (!SCENES[sec] || REDUCED.matches) return null;
+  if (!document.body.classList.contains("loaded")) return null;   // a deep link: no map yet
+  if ($$(".gallery-dlg[open], .lightbox[open]").length) return null;
+  return SCENES[sec];
+}
+
+/* any click or key during a scene finishes it */
+function skippable(anims) {
+  const skip = () => anims.forEach((a) => { try { a.finish(); } catch (_) {} });
+  addEventListener("pointerdown", skip, true);
+  addEventListener("keydown", skip, true);
+  return () => {
+    removeEventListener("pointerdown", skip, true);
+    removeEventListener("keydown", skip, true);
+  };
+}
+
+/* Start on a quiet frame. Opening a gallery builds its whole mosaic in the
+   same frame its scene is made, and an animation's clock starts when it's
+   created — so the first slice of motion played out during that work and the
+   scene seemed to jump in. Hold everything on its first frame, then go two
+   frames later, once the page has painted. (A skip in between finishes them,
+   and a finished animation must not be restarted.) */
+function runClean(anims) {
+  anims.forEach((a) => a.pause());
+  requestAnimationFrame(() => requestAnimationFrame(() =>
+    anims.forEach((a) => { if (a.playState === "paused") a.play(); })));
+}
+
+function sceneStage(parent) {
+  const stage = document.createElement("div");
+  stage.className = "scene";
+  stage.setAttribute("aria-hidden", "true");
+  parent.appendChild(stage);
+  return stage;
+}
+
+function playIn(sec, scene) {
+  const ui = galUI[sec];
+  const stage = sceneStage(ui.dlg);
+  const anims = scene.in(stage, ui.night, sec);
+  runClean(anims);
+  const unskip = skippable(anims);
+  ui.scene = { stage, anims, unskip };
+  Promise.all(anims.map((a) => a.finished)).then(() => land(sec), () => {});
+}
+
+/* the scene's done: the page fades up, and the scene fades off it */
+function land(sec) {
+  const ui = galUI[sec], sc = ui.scene;
+  if (!sc) return;
+  ui.scene = null;
+  sc.unskip();
+  ui.dlg.classList.remove("arriving", "dusk");
+  ui.dlg.classList.add("shown");
+  revealGallery(sec);
+  /* let go of the scene's animations only once it's faded: cancelled, every
+     piece jumps back to where it was laid out (postcards unrotated, flicked
+     pages back in the middle) — in plain view, for the length of the fade */
+  const clear = () => { sc.anims.forEach((a) => a.cancel()); sc.stage.remove(); };
+  sc.stage.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 280, easing: "ease-out" })
+    .finished.then(clear, clear);
+}
+
+/* back to the map: the scene plays over it the other way, then lifts */
+function playOut(sec) {
+  const scene = SCENES[sec];
+  const o = document.createElement("div");
+  o.className = "gal-return";
+  o.setAttribute("aria-hidden", "true");
+  const night = document.createElement("div");
+  night.className = "gal-night";
+  o.appendChild(night);
+  document.body.appendChild(o);
+  const anims = scene.out(sceneStage(o), night, sec);
+  runClean(anims);
+  const unskip = skippable(anims);
+  const done = () => { unskip(); o.remove(); };
+  Promise.all(anims.map((a) => a.finished)).then(done, done);
+}
+
+function wireScenes(sec) {
+  const ui = galUI[sec], dlg = ui.dlg;
+
+  /* The way out has to start in the same frame the gallery closes, or the map
+     flashes up first — so it starts from close() itself (and from Esc's
+     cancel), not from the close event, which comes a moment later. */
+  const leaving = () => {
+    if (ui.leaving || !dlg.open || ui.scene || !SCENES[sec] || REDUCED.matches) return;
+    const going = location.hash.replace(/^#\//, "");
+    if (going && going !== sec) return;      // off to another gallery, not the map
+    ui.leaving = true;
+    playOut(sec);
+  };
+  const nativeClose = HTMLDialogElement.prototype.close;
+  dlg.close = function (v) { leaving(); return nativeClose.call(this, v); };
+  dlg.addEventListener("cancel", leaving);
+
+  dlg.addEventListener("close", () => {
+    ui.leaving = false;
+    if (ui.scene) {                   // closed mid-scene
+      ui.scene.unskip();
+      ui.scene.anims.forEach((a) => a.cancel());
+      ui.scene.stage.remove();
+      ui.scene = null;
+    }
+    dlg.classList.remove("fx", "arriving", "dusk", "shown");
+  });
+}
+
+/* --- shared: hand-inked lines without a live filter ---
+   The map roughens its ink with an SVG filter; re-running that on shapes this
+   size every frame is what makes phones stutter. So the wobble is baked into
+   the path instead: every straight stroke gets a couple of small kinks. */
+function inkLine(pts, rnd, wob = 1.4) {
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+    const len = Math.hypot(x1 - x0, y1 - y0) || 1;
+    const nx = -(y1 - y0) / len, ny = (x1 - x0) / len;
+    for (const f of [0.33, 0.67]) {
+      const o = (rnd() - 0.5) * 2 * wob;
+      d += `L${(x0 + (x1 - x0) * f + nx * o).toFixed(1)},${(y0 + (y1 - y0) * f + ny * o).toFixed(1)}`;
+    }
+    d += `L${x1.toFixed(1)},${y1.toFixed(1)}`;
+  }
+  return d;
+}
+
+/* the transform that puts an element laid out at F over the screen box S,
+   scaling about its centre */
+function overRect(F, S) {
+  const dx = S.left + S.width / 2 - (F.left + F.width / 2);
+  const dy = S.top + S.height / 2 - (F.top + F.height / 2);
+  return `translate(${dx}px, ${dy}px) scale(${S.width / F.width})`;
+}
+/* where something on the map is on screen, or null if it isn't showing */
+function onMap(sel) {
+  const el = $(sel), r = el && el.getBoundingClientRect();
+  return r && r.width > 2 ? r : null;
+}
+const rndIn = (a, b) => a + Math.random() * (b - a);
+const fadeNight = (night, from, to, delay, duration) =>
+  night.animate([{ opacity: from }, { opacity: to }], { duration, delay, easing: "ease-in-out", fill: "both" });
+
+/* ---------- Peaks & Wilds: walking into the range ----------
+   Three ranges, drawn as the landmark is — overlapping peaks, each one's
+   paper hiding the lines of the one behind, pen shading down the shadow
+   side, snow on the tall ones, pines at their feet — rise from the bottom
+   of the screen one behind another, the far range last, climbing over the
+   others, while night and a moon come up behind them. Going home, they sink. */
+
+function snowline(p, rnd) {
+  const at = (d, xb) => p.ax + (xb - p.ax) * d;
+  const y1 = p.ay + p.h * 0.3, y2 = p.ay + p.h * 0.2;
+  const xl = at(0.3, p.x0), xr = at(0.3, p.x1), st = (xr - xl) / 4;
+  return inkLine([[xl, y1], [xl + st, y2], [xl + 2 * st, y1], [xl + 3 * st, y2], [xr, y1]], rnd, 0.5);
+}
+
+/* short strokes down the right-hand (shadow) face, parallel to the left one */
+function hatching(p, base, rnd) {
+  const lx = p.x0 - p.ax, ly = base - p.ay, ll = Math.hypot(lx, ly);
+  const dx = lx / ll, dy = ly / ll;
+  const n = Math.min(7, 3 + Math.floor(p.h / 70));
+  let d = "";
+  for (let k = 0; k < n; k++) {
+    const t = 0.32 + 0.6 * (k + rnd() * 0.5) / n;
+    const px = p.ax + (p.x1 - p.ax) * t + dx * 4, py = p.ay + (base - p.ay) * t + dy * 4;
+    const len = Math.min(p.h * rndIn(0.1, 0.2), (base - 4 - py) / dy);
+    if (len < 6) continue;
+    d += `M${px.toFixed(1)},${py.toFixed(1)} L${(px + dx * len).toFixed(1)},${(py + dy * len).toFixed(1)} `;
+  }
+  return d;
+}
+
+function pine(x, y, s) {
+  return `M${x - 8 * s},${y} L${x},${y - 22 * s} L${x + 8 * s},${y} M${x - 5 * s},${y - 9 * s} L${x},${y - 20 * s} L${x + 5 * s},${y - 9 * s} M${x},${y} L${x},${y + 6 * s} `;
+}
+
+function ridges(W, H) {
+  const rnd = Math.random;
+  const layers = [
+    // far → near: where the feet of the peaks sit, how tall they are, the pen
+    { base: 0.47, tall: [0.22, 0.38], stroke: 2.3, snow: 0.24 },
+    { base: 0.7,  tall: [0.16, 0.28], stroke: 2.8, snow: 0.25, trees: 0.4 },
+    { base: 0.9,  tall: [0.13, 0.22], stroke: 3.3, trees: 1 },
+  ];
+  return layers.map((L) => {
+    const base = L.base * H, bottom = H * 1.4;
+    const peaks = [];
+    let x = -rnd() * 120;
+    while (x < W + 60) {
+      const h = Math.max(60, (L.tall[0] + (L.tall[1] - L.tall[0]) * rnd()) * H);
+      const w = h * (1.1 + rnd() * 0.45);
+      peaks.push({ x0: x - w / 2, ax: x + (rnd() - 0.5) * w * 0.14, ay: base - h, x1: x + w / 2, h });
+      x += w * (0.6 + rnd() * 0.35);         // overlap the next one, as the landmark does
+    }
+    // who stands in front: mostly the tall ones, with a little shuffle
+    peaks.sort((a, b) => a.h + rnd() * H * 0.12 - (b.h + rnd() * H * 0.12));
+
+    let ink = "";
+    for (const p of peaks) {
+      ink += `<path class="ridge" style="stroke-width:${L.stroke}" d="${inkLine([[p.x0, base], [p.ax, p.ay], [p.x1, base]], rnd)}"/>`;
+      let marks = hatching(p, base, rnd);
+      if (L.snow && p.h > L.snow * H) marks += snowline(p, rnd);
+      ink += `<path class="ridge-mark" style="stroke-width:${L.stroke * 0.7}" d="${marks}"/>`;
+    }
+    // pines in little stands at the feet of the range
+    if (L.trees) {
+      let trees = "";
+      for (let tx = rnd() * 140; tx < W + 20; tx += rndIn(110, 260)) {
+        if (rnd() > L.trees) continue;
+        const k = 1 + Math.floor(rnd() * 3);
+        for (let j = 0; j < k; j++) trees += pine(tx + j * rndIn(13, 19), base + 4 + rnd() * 3, rndIn(0.8, 1.35) * (L.trees < 1 ? 0.7 : 1));
+      }
+      ink += `<path class="ridge ridge-trees" style="stroke-width:${L.stroke * 0.7}" d="${trees}"/>`;
+    }
+
+    const svg = `<svg width="${W}" height="${bottom}" viewBox="0 0 ${W} ${bottom}">
+      <rect class="ridge-ground" x="-200" y="${base - 1}" width="${W + 400}" height="${bottom - base + 1}"/>
+      ${ink}</svg>`;
+    const top = Math.min(...peaks.map((p) => p.ay));
+    return { svg, below: H - top + 40 };     // far enough down to start fully off screen
+  });
+}
+
+/* the sky behind: a crescent moon, a few stars, three birds heading home */
+function nightSky(W, H) {
+  const rnd = Math.random;
+  const r = clamp(Math.min(W, H) * 0.045, 18, 34), mx = W * 0.8, my = H * 0.13;
+  let stars = "";
+  for (let i = 0; i < 16; i++) {
+    stars += `<circle class="sky-star" cx="${(rnd() * W).toFixed(0)}" cy="${(rnd() * H * 0.32).toFixed(0)}" r="${rndIn(0.8, 1.8).toFixed(1)}"/>`;
+  }
+  let birds = "";
+  for (let i = 0; i < 3; i++) {
+    const bx = W * 0.2 + i * rndIn(26, 40), by = H * 0.07 + rndIn(-10, 10), s = rndIn(0.9, 1.3);
+    birds += `M${bx - 9 * s},${by - 4 * s} Q${bx - 4 * s},${by - 7 * s} ${bx},${by} Q${bx + 4 * s},${by - 7 * s} ${bx + 9 * s},${by - 4 * s} `;
+  }
+  return `<svg class="sky" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${stars}
+    <path class="ridge-mark" style="stroke-width:2.4" d="M${mx},${my - r} A${r},${r} 0 0 0 ${mx},${my + r} A${r * 1.25},${r * 1.25} 0 0 1 ${mx},${my - r} Z"/>
+    <path class="ridge-mark" style="stroke-width:2" d="${birds}"/></svg>`;
+}
+
+/* The ski game's ranges (alps.js), drawn still for this doorway. A full
+   range is a lot of path to generate in the frame you click, so the next one
+   is built ahead whenever the page is idle — a new range every visit. Until
+   alps.js has arrived, the plain pen ranges above stand in. */
+const whenIdle = (fn) =>
+  (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 2000 }) : setTimeout(fn, 300));
+let alpsStill = null;
+
+function buildAlpsStill() {
+  if (!window.Alps || !Alps.still) return null;
+  const W = innerWidth, H = innerHeight, tall = Math.round(H * 1.4);
+  const layers = Alps.still(W, H, (Math.random() * 2147483647) | 0).map((l) => ({
+    svg: `<svg class="sk-alp-${l.name}" width="${W}" height="${tall}" viewBox="0 0 ${W} ${tall}">${l.svg}</svg>`,
+    below: H - l.top + 40,
+  }));
+  return { W, H, layers };
+}
+function stillRanges(W, H) {
+  const r = alpsStill && alpsStill.W === W && alpsStill.H === H ? alpsStill : buildAlpsStill();
+  alpsStill = null;
+  whenIdle(() => { alpsStill = buildAlpsStill(); });
+  return r ? r.layers : ridges(W, H);
+}
+function loadAlps() {
+  if (window.Alps || document.querySelector("script[data-alps]")) return;
+  const sc = document.createElement("script");
+  sc.src = "alps.js";
+  sc.async = true;
+  sc.dataset.alps = "1";          // ski.js looks for this and won't fetch it twice
+  sc.onload = () => whenIdle(() => { alpsStill = buildAlpsStill(); });
+  document.head.appendChild(sc);
+}
+
+const peaksScene = {
+  in(stage, night) {
+    const W = innerWidth, H = innerHeight;
+    const rs = stillRanges(W, H);
+    stage.innerHTML = nightSky(W, H) + rs.map((r) => r.svg).join("");
+    const [sky, ...els] = stage.children;
+    const anims = els.map((el, i) => el.animate(
+      [{ transform: `translateY(${rs[i].below}px)` }, { transform: "none" }],
+      // near ridge first; the far one starts last and climbs over the others
+      { duration: 700, delay: (2 - i) * 95, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "both" }));
+    anims.push(fadeNight(night, 0, 1, 400, 320));
+    anims.push(sky.animate([{ opacity: 0, transform: "translateY(16px)" }, { opacity: 1, transform: "none" }],
+      { duration: 420, delay: 380, easing: "ease-out", fill: "both" }));
+    return anims;
+  },
+  out(stage, night) {
+    const W = innerWidth, H = innerHeight;
+    const rs = stillRanges(W, H);
+    stage.innerHTML = nightSky(W, H) + rs.map((r) => r.svg).join("");
+    const [sky, ...els] = stage.children;
+    const anims = els.map((el, i) => el.animate(
+      [{ transform: "none" }, { transform: `translateY(${rs[i].below}px)` }],
+      // near ridge drops first; the far one last, uncovering the map
+      { duration: 440, delay: 90 + (2 - i) * 70, easing: "cubic-bezier(0.5, 0, 0.75, 0.4)", fill: "both" }));
+    anims.push(fadeNight(night, 1, 0, 60, 260));
+    anims.push(sky.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: "ease-out", fill: "both" }));
+    return anims;
+  },
+};
+
+/* ---------- Journeys: the plane, and the postcards ----------
+   The landmark's plane takes off across the screen, laying its dotted flight
+   path behind it, while postcards of the first photos in the gallery are
+   tossed down onto the table. Going home, they're swept away. */
+
+/* the landmark's own plane, solid this time: wings and tail first, so the
+   fuselage lies on top of them */
+function planeSvg() {
+  const g = $("#lm-journeys .lm-art g[transform]");
+  const parts = g ? [...g.children].map((c) => c.outerHTML) : [];
+  if (parts.length) parts.push(parts.shift());
+  return `<svg class="plane-fly gal-pen" viewBox="-40 -40 80 80" style="--k:0.5"><g>${parts.join("")}</g></svg>`;
+}
+
+function postcards(stage, sec, n) {
+  const W = innerWidth, H = innerHeight;
+  const list = (shownOrder[sec] || []).slice(0, n);
+  const cw = clamp(Math.min(W, H * 1.2) * 0.3, 140, 300);
+  return list.map((ph, i) => {
+    const el = document.createElement("div");
+    el.className = "postcard-fly";
+    const img = new Image();
+    img.src = ph.thumb || ph.src;
+    img.alt = "";
+    img.decoding = "async";
+    const ar = ph.ar || 1.5;
+    img.style.aspectRatio = String(ar);
+    el.style.width = (ar < 1 ? cw * 0.7 : cw) + "px";
+    el.appendChild(img);
+    // scattered round the middle of the table, each at its own angle
+    const a = (i / list.length) * Math.PI * 2 + rndIn(-0.4, 0.4);
+    const rr = Math.min(W, H) * rndIn(0.12, 0.3);
+    el.style.left = W / 2 + Math.cos(a) * rr * 1.6 + "px";
+    el.style.top = H / 2 + Math.sin(a) * rr + "px";
+    stage.appendChild(el);
+    return { el, rot: rndIn(-14, 14) };
+  });
+}
+
+const flightPath = (W, H, back) => back
+  ? `M${W + 220},${H * 0.3} C${W * 0.66},${H * 0.12} ${W * 0.34},${H * 0.6} -220,${H * 0.46}`
+  : `M-220,${H * 0.74} C${W * 0.3},${H * 0.8} ${W * 0.62},${H * 0.2} ${W + 220},${H * 0.24}`;
+
+const journeysScene = {
+  in(stage, night, sec) {
+    const W = innerWidth, H = innerHeight, d = flightPath(W, H);
+    const cards = postcards(stage, sec, 5);
+    stage.insertAdjacentHTML("beforeend", `
+      <svg class="trail-fly" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+        <defs><mask id="flightMask" maskUnits="userSpaceOnUse"><path class="trail-mask" pathLength="1" d="${d}"/></mask></defs>
+        <path class="trail-dots" mask="url(#flightMask)" d="${d}"/>
+      </svg>${planeSvg()}`);
+    const plane = stage.querySelector(".plane-fly");
+    plane.style.offsetPath = `path("${d}")`;
+    // the plane crosses at an even pace, so you can actually watch it go
+    const fly = { duration: 1150, easing: "cubic-bezier(0.35, 0, 0.65, 1)", fill: "both" };
+    const anims = cards.map((c, i) => c.el.animate(
+      [{ transform: `translate(${rndIn(-0.3, 0.3) * W}px, ${H * rndIn(0.75, 1)}px) rotate(${c.rot + rndIn(-50, 50)}deg)` },
+       { transform: `rotate(${c.rot}deg)` }],
+      { duration: 540, delay: 240 + i * 85, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "both" }));
+    anims.push(plane.animate([{ offsetDistance: "0%" }, { offsetDistance: "100%" }], fly));
+    anims.push(stage.querySelector(".trail-mask").animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], fly));
+    anims.push(fadeNight(night, 0, 1, 0, 380));
+    return anims;
+  },
+  out(stage, night, sec) {
+    const W = innerWidth, H = innerHeight, d = flightPath(W, H, true);
+    const cards = postcards(stage, sec, 5);
+    stage.insertAdjacentHTML("beforeend", planeSvg());
+    const plane = stage.querySelector(".plane-fly");
+    plane.style.offsetPath = `path("${d}")`;
+    const anims = cards.map((c, i) => c.el.animate(
+      [{ transform: `rotate(${c.rot}deg)` },
+       { transform: `translate(${rndIn(-0.4, 0.4) * W}px, ${H * 1.1}px) rotate(${c.rot + rndIn(-40, 40)}deg)` }],
+      { duration: 400, delay: i * 40, easing: "cubic-bezier(0.55, 0, 0.8, 0.4)", fill: "both" }));
+    anims.push(plane.animate([{ offsetDistance: "0%" }, { offsetDistance: "100%" }],
+      { duration: 700, easing: "cubic-bezier(0.35, 0, 0.65, 1)", fill: "both" }));
+    anims.push(fadeNight(night, 1, 0, 200, 300));
+    return anims;
+  },
+};
+
+/* ---------- Good Company: taking the picture ----------
+   You're pulled into the landmark camera's viewfinder: its corners open out
+   to the edges of the screen, the focus ring hunts and locks, the exposure
+   reads out along the bottom — and the shutter fires. The gallery is the
+   picture. Going home, the flash fires first and the frame closes back down
+   onto the camera. */
+
+const VF_CORNERS = [
+  // the L of each corner, and where its vertex sits in a 70px box
+  { d: "M4,64 L4,4 L64,4",   v: [4, 4],   at: (W, H, m) => [m, m] },
+  { d: "M6,4 L66,4 L66,64",  v: [66, 4],  at: (W, H, m) => [W - m - 70, m] },
+  { d: "M4,6 L4,66 L64,66",  v: [4, 66],  at: (W, H, m) => [m, H - m - 70] },
+  { d: "M6,66 L66,66 L66,6", v: [66, 66], at: (W, H, m) => [W - m - 70, H - m - 70] },
+];
+
+function viewfinder(stage, sec) {
+  const W = innerWidth, H = innerHeight, m = clamp(W * 0.04, 16, 44);
+  const ph = (shownOrder[sec] || [])[0];
+  const cam = onMap("#lm-portraits .lm-art") ||
+    { left: W / 2 - 40, top: H / 2 - 40, right: W / 2 + 40, bottom: H / 2 + 40 };
+  const camAt = [[cam.left, cam.top], [cam.right, cam.top], [cam.left, cam.bottom], [cam.right, cam.bottom]];
+  stage.innerHTML = VF_CORNERS.map((c) => {
+    const [x, y] = c.at(W, H, m);
+    return `<svg class="vf-corner" viewBox="0 0 70 70" style="left:${x}px;top:${y}px;transform-origin:${c.v[0]}px ${c.v[1]}px">
+      <path d="${c.d}"/></svg>`;
+  }).join("") + (ph ? `<img class="vf-subject" alt="" src="${ph.thumb || ph.src}" style="aspect-ratio:${ph.ar || 1.5}">` : "") + `
+    <svg class="vf-focus" viewBox="-60 -60 120 120">
+      <circle r="34"/><path d="M-50,0 L-40,0 M40,0 L50,0 M0,-50 L0,-40 M0,40 L0,50"/>
+      <circle class="vf-lock" cx="44" cy="-44" r="4.5"/>
+    </svg>
+    <p class="vf-read">1/250 &nbsp;·&nbsp; f/2.8 &nbsp;·&nbsp; ISO 200</p>
+    <div class="vf-flash"></div>`;
+  const corners = [...stage.querySelectorAll(".vf-corner")];
+  // from each corner's place round the camera on the map, to the screen's corner
+  const shut = corners.map((el, i) => {
+    const [x, y] = VF_CORNERS[i].at(W, H, m), [vx, vy] = VF_CORNERS[i].v;
+    return `translate(${camAt[i][0] - (x + vx)}px, ${camAt[i][1] - (y + vy)}px) scale(0.35)`;
+  });
+  // the subject sits behind everything else in the frame
+  const subject = stage.querySelector(".vf-subject");
+  if (subject) stage.prepend(subject);
+  return { corners, shut, subject, focus: stage.querySelector(".vf-focus"), lock: stage.querySelector(".vf-lock"),
+    read: stage.querySelector(".vf-read"), flash: stage.querySelector(".vf-flash") };
+}
+
+const portraitsScene = {
+  in(stage, night, sec) {
+    const v = viewfinder(stage, sec);
+    const anims = v.corners.map((el, i) => el.animate([{ transform: v.shut[i] }, { transform: "none" }],
+      { duration: 620, easing: "cubic-bezier(0.25, 1, 0.4, 1)", fill: "both" }));
+    anims.push(fadeNight(night, 0, 1, 100, 360));
+    anims.push(v.focus.animate(
+      [{ opacity: 0, transform: "scale(1.6)" }, { opacity: 1, transform: "scale(0.88)", offset: 0.6 }, { opacity: 1, transform: "scale(1)" }],
+      { duration: 380, delay: 260, easing: "ease-out", fill: "both" }));
+    anims.push(v.lock.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 80, delay: 600, fill: "both" }));
+    // the focus pull: soft, hunting, then sharp just as the lock lights
+    if (v.subject) anims.push(v.subject.animate(
+      [{ opacity: 0, filter: "blur(16px)", transform: "scale(1.06)" },
+       { opacity: 0.95, filter: "blur(9px)", transform: "scale(1.03)", offset: 0.4 },
+       { opacity: 1, filter: "blur(2px)", transform: "scale(0.995)", offset: 0.75 },
+       { opacity: 1, filter: "blur(0px)", transform: "none" }],
+      { duration: 520, delay: 120, easing: "ease-out", fill: "both" }));
+    anims.push(v.read.animate([{ opacity: 0 }, { opacity: 0.8 }], { duration: 240, delay: 320, fill: "both" }));
+    // the shutter: the flash peaks as the scene ends, and fades with it
+    anims.push(v.flash.animate([{ opacity: 0 }, { opacity: 0.85 }],
+      { duration: 110, delay: 700, easing: "ease-in", fill: "both" }));
+    return anims;
+  },
+  out(stage, night, sec) {
+    const v = viewfinder(stage, sec);
+    const anims = [v.flash.animate([{ opacity: 0.85 }, { opacity: 0 }], { duration: 260, easing: "ease-out", fill: "both" })];
+    anims.push(...v.corners.map((el, i) => el.animate([{ transform: "none" }, { transform: v.shut[i] }],
+      { duration: 460, delay: 120, easing: "cubic-bezier(0.55, 0, 0.8, 0.4)", fill: "both" })));
+    for (const el of [v.focus, v.read, v.subject].filter(Boolean)) {
+      anims.push(el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, delay: 60, fill: "both" }));
+    }
+    anims.push(fadeNight(night, 1, 0, 180, 320));
+    return anims;
+  },
+};
+
+/* ---------- The Whole Lot: flicking through the notebook ----------
+   Pages of the notebook riffle past — the mountains, the plane, the camera —
+   and the last one stays: the compass, its needle spinning round to settle. */
+
+function notebookPage(stage, sec, page) {
+  const el = document.createElement("div");
+  el.className = "page-fly";
+  if (sec === "everything") {
+    el.innerHTML = `<svg class="gal-pen" viewBox="-60 -60 120 120" style="--k:1"><g filter="url(#roughen)">
+      <circle class="ink thin" r="46"/><circle class="ink hairline" r="37" stroke-dasharray="1 7"/>
+      <path class="ink hairline" d="M0,-46 L8,0 L0,46 L-8,0 Z"/><path class="ink hairline" d="M-46,0 L0,8 L46,0 L0,-8 Z"/></g>
+      <g class="needle-fly"><path class="crimson-fill" d="M0,-33 L7,0 L-7,0 Z"/><path class="ink hairline" d="M0,33 L7,0 L-7,0 Z"/></g></svg>`;
+  } else {
+    el.innerHTML = `<svg class="gal-pen" viewBox="${GAL_ART[sec].vb}" style="--k:0.8"><g filter="url(#roughen)">${galArt(sec)}</g></svg>`;
+  }
+  el.insertAdjacentHTML("beforeend", `<span class="page-no">p.${page}</span>`);
+  stage.appendChild(el);
+  return el;
+}
+
+const everythingScene = {
+  in(stage, night) {
+    const H = innerHeight;
+    const flick = ["peaks", "journeys", "portraits"].map((s) => notebookPage(stage, s, CONTENTS_META[s].page));
+    const last = notebookPage(stage, "everything", CONTENTS_META.everything.page);
+    const anims = flick.map((el, i) => el.animate(
+      [{ transform: `translateY(${H}px) rotate(${7 - i * 3}deg)` }, { transform: `translateY(${-H}px) rotate(${-6 + i * 2}deg)` }],
+      { duration: 460, delay: i * 115, easing: "cubic-bezier(0.45, 0, 0.55, 1)", fill: "both" }));
+    anims.push(last.animate([{ transform: `translateY(${H}px) rotate(5deg)` }, { transform: "rotate(-1.5deg)" }],
+      { duration: 460, delay: 330, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "both" }));
+    anims.push(last.querySelector(".needle-fly").animate(
+      [{ transform: "rotate(0deg)" }, { transform: "rotate(790deg)", offset: 0.75 }, { transform: "rotate(720deg)" }],
+      { duration: 620, delay: 420, easing: "cubic-bezier(0.2, 0.7, 0.3, 1)", fill: "both" }));
+    anims.push(fadeNight(night, 0, 1, 40, 340));
+    return anims;
+  },
+  out(stage, night) {
+    const H = innerHeight;
+    const last = notebookPage(stage, "everything", CONTENTS_META.everything.page);
+    return [
+      last.animate([{ transform: "rotate(-1.5deg)" }, { transform: `translateY(${H}px) rotate(6deg)` }],
+        { duration: 420, delay: 60, easing: "cubic-bezier(0.55, 0, 0.8, 0.4)", fill: "both" }),
+      last.querySelector(".needle-fly").animate([{ transform: "rotate(0deg)" }, { transform: "rotate(-360deg)" }],
+        { duration: 480, easing: "ease-in", fill: "both" }),
+      fadeNight(night, 1, 0, 160, 300),
+    ];
+  },
+};
+
+/* which galleries have a scene */
+const SCENES = { peaks: peaksScene, journeys: journeysScene, portraits: portraitsScene, everything: everythingScene };
+
+/* ---------- the two paper pages: a little flourish as they open ----------
+   About me and Say hello are sheets laid over the map, so their scenes are
+   short and play around the sheet as it arrives. They just close. */
+
+/* About me: sparks fly off the campfire, smoke billows up behind, and the
+   page rises out of the fire, opening out as it comes */
+function aboutScene(back, front, sheet) {
+  const W = innerWidth, H = innerHeight;
+  const fire = onMap("#lm-about .ember") || { left: W / 2, top: H * 0.7, width: 10, height: 10 };
+  const fx = fire.left + fire.width / 2, fy = fire.top;
+
+  // soft puffs, not pen lines: drawn as lines they read as a stray scribble
+  // across the page. They rise and spread behind the page as it comes up.
+  const puffs = [];
+  for (let i = 0; i < 7; i++) {
+    const p = document.createElement("div");
+    p.className = "puff-fly";
+    const size = rndIn(70, 140);
+    p.style.cssText = `left:${fx - size / 2}px;top:${fy - size / 2}px;width:${size}px;height:${size}px`;
+    back.appendChild(p);
+    puffs.push(p);
+  }
+  let sparks = "";
+  for (let i = 0; i < 7; i++) sparks += `<circle class="spark-fly" cx="${fx + rndIn(-8, 8)}" cy="${fy}" r="${rndIn(1.6, 2.8)}"/>`;
+  front.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${sparks}</svg>`;
+
+  const anims = puffs.map((p, i) => p.animate(
+    [{ transform: "translate(0, 0) scale(0.3)", opacity: 0 },
+     { opacity: 0.75, offset: 0.25 },
+     { transform: `translate(${rndIn(-70, 70)}px, ${-H * rndIn(0.25, 0.45)}px) scale(${rndIn(1.4, 2.1)})`, opacity: 0 }],
+    { duration: rndIn(800, 1000), delay: i * 45, easing: "cubic-bezier(0.2, 0.6, 0.35, 1)", fill: "both" }));
+  anims.push(...[...front.querySelectorAll(".spark-fly")].map((c) => c.animate(
+    [{ transform: "none", opacity: 1 }, { transform: `translate(${rndIn(-40, 40)}px, ${-rndIn(90, 220)}px)`, opacity: 0 }],
+    { duration: rndIn(550, 850), delay: rndIn(0, 220), easing: "cubic-bezier(0.2, 0.6, 0.4, 1)", fill: "both" })));
+  const F = sheet.getBoundingClientRect();
+  const ember = { left: fx - 24, top: fy - 16, width: 48, height: 32 };
+  anims.push(sheet.animate(
+    [{ transform: `${overRect(F, ember)} rotate(6deg)`, opacity: 0 },
+     { opacity: 1, offset: 0.2 },
+     { transform: "translateY(-6px) rotate(-1deg)", offset: 0.8 },
+     { transform: "none", opacity: 1 }],
+    { duration: 720, delay: 80, easing: "cubic-bezier(0.33, 0.9, 0.3, 1)", fill: "backwards" }));
+  return anims;
+}
+
+/* Say hello: the envelope off the signpost flies in, its flap folds open, the
+   postcard is drawn up out of it, and the envelope drops away. It comes in
+   two halves so the card can come out from between them: the back (and the
+   flap, once it's folded open) behind the card, the front pocket (and the
+   flap while it's shut) in front of it. */
+function contactScene(back, front, sheet) {
+  const box = `class="env-fly" viewBox="0 -110 260 290"`;
+  back.innerHTML = `<svg ${box}>
+      <path class="env-inside" d="M6,6 L254,6 L254,174 L6,174 Z"/>
+      <path class="env-open" d="M6,6 L130,-92 L254,6 Z"/></svg>`;
+  front.innerHTML = `<svg ${box}>
+      <path class="env-pocket" d="M6,6 L130,96 L254,6 L254,174 L6,174 Z"/>
+      <path class="env-fold" d="M6,174 L104,96 M254,174 L156,96"/>
+      <g class="env-flap"><path d="M6,6 L130,104 L254,6 Z"/><circle class="env-seal" cx="130" cy="88" r="13"/></g></svg>`;
+  const envs = [back.firstElementChild, front.firstElementChild];
+  const B = back.querySelector(".env-inside").getBoundingClientRect();
+  const from = onMap("#lm-contact .lm-art g");
+  const fly = from ? `${overRect(B, from)} rotate(-12deg)` : "translateY(30vh) scale(0.4)";
+
+  const anims = envs.map((e) => e.animate(
+    [{ transform: fly, opacity: from ? 1 : 0 }, { transform: "none", opacity: 1 }],
+    { duration: 420, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "both" }));
+  // the flap folds: shut half shrinks to its hinge, open half grows up from it
+  anims.push(front.querySelector(".env-flap").animate([{ transform: "scaleY(1)" }, { transform: "scaleY(0)" }],
+    { duration: 110, delay: 400, easing: "ease-in", fill: "both" }));
+  anims.push(back.querySelector(".env-open").animate([{ transform: "scaleY(0)" }, { transform: "scaleY(1)" }],
+    { duration: 130, delay: 510, easing: "ease-out", fill: "both" }));
+
+  // the card: tucked inside, drawn up out of the opening, then out to full size
+  const F = sheet.getBoundingClientRect();
+  const s0 = Math.min((B.width * 0.82) / F.width, (B.height * 0.86) / F.height);
+  const dx = B.left + B.width / 2 - (F.left + F.width / 2);
+  const inY = B.top + B.height / 2 - (F.top + F.height / 2);
+  const outY = B.top - F.height * s0 * 0.22 - (F.top + F.height / 2);
+  // once it's clear of the pocket it comes to the front, so the envelope
+  // falls away behind it rather than across the form
+  anims.push(sheet.animate(
+    [{ transform: `translate(${dx}px, ${inY}px) scale(${s0})`, opacity: 0, zIndex: 0 },
+     { opacity: 1, offset: 0.01 },
+     { transform: `translate(${dx}px, ${outY}px) scale(${s0 * 1.04})`, zIndex: 0, offset: 0.42 },
+     { zIndex: 2, offset: 0.43 },
+     { transform: "none", opacity: 1, zIndex: 2 }],
+    { duration: 560, delay: 580, easing: "cubic-bezier(0.45, 0, 0.25, 1)", fill: "backwards" }));
+  // and the envelope, empty, drops away as the card opens out
+  anims.push(...envs.map((e) => e.animate(
+    [{ translate: "-50% -50%", opacity: 1 }, { translate: "-50% calc(-50% + 30vh)", opacity: 0 }],
+    { duration: 320, delay: 830, easing: "cubic-bezier(0.55, 0, 0.8, 0.4)", fill: "forwards" })));
+  return anims;
+}
+
+const SHEET_SCENES = { about: aboutScene, contact: contactScene };
+
+function sheetSceneFor(sec) {
+  if (!SHEET_SCENES[sec] || REDUCED.matches) return null;
+  if (!document.body.classList.contains("loaded")) return null;
+  if ($$(".gallery-dlg[open], .lightbox[open]").length) return null;
+  return SHEET_SCENES[sec];
+}
+
+function playSheet(dlg, scene) {
+  const mk = () => {
+    const st = document.createElement("div");
+    st.className = "scene";
+    st.setAttribute("aria-hidden", "true");
+    return st;
+  };
+  const back = mk(), front = mk();
+  dlg.prepend(back);              // behind the sheet
+  dlg.append(front);              // in front of it
+  const anims = scene(back, front, dlg.querySelector(".sheet"));
+  /* the map dims in step with the page arriving, not all at once before it
+     (not every browser can animate a backdrop; those just dim) */
+  try {
+    anims.push(dlg.animate([{ opacity: 0 }, { opacity: 1 }],
+      { duration: 360, easing: "ease-out", pseudoElement: "::backdrop" }));
+  } catch (_) {}
+  runClean(anims);
+  const unskip = skippable(anims);
+  const done = () => { unskip(); back.remove(); front.remove(); };
+  dlg._scene = { anims, done };
+  Promise.all(anims.map((a) => a.finished)).then(done, done);
+}
+
+for (const sec of Object.keys(SHEET_SCENES)) {
+  const dlg = $("#dlg-" + sec);
+  dlg.addEventListener("close", () => {
+    if (dlg._scene) { dlg._scene.anims.forEach((a) => a.cancel()); dlg._scene.done(); dlg._scene = null; }
+    dlg.classList.remove("fx");
+  });
+}
+
+/* the bar firms up once the opening has scrolled away; the count says how far
+   down the page you are; the trail draws itself when you reach the end */
+function galScrolled(ui, sec) {
+  const top = ui.dlg.scrollTop, h = ui.dlg.clientHeight;
+  ui.bar.classList.toggle("solid", top > ui.head.offsetTop + ui.head.offsetHeight - ui.bar.offsetHeight - 40);
+  const tiles = tileOrder[sec] || [];
+  const line = top + h * 0.6 - ui.grid.offsetTop;
+  let seen = 0;
+  for (const t of tiles) if (t._top < line) seen++;
+  const txt = `${clamp(seen, 1, tiles.length)} / ${tiles.length}`;
+  if (ui.prog.textContent !== txt) ui.prog.textContent = txt;
+  if (top + h > ui.end.offsetTop + 120) ui.end.classList.add("seen");
+}
+
+/* paper grain, made once — the map's #grain filter, as a tile the galleries
+   and the viewer can repeat for free */
+{
+  const c = document.createElement("canvas");
+  c.width = c.height = 220;
+  const x = c.getContext("2d"), d = x.createImageData(220, 220);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const v = Math.random() < 0.5 ? 0 : 255;
+    d.data[i] = d.data[i + 1] = d.data[i + 2] = v;
+    d.data[i + 3] = Math.random() * 14;
+  }
+  x.putImageData(d, 0, 0);
+  document.documentElement.style.setProperty("--grain", `url(${c.toDataURL()})`);
+}
+
+GALLERIES.forEach(dressGallery);
+
 /* ---------- the mosaic ----------
-   The old site handed layout to Isotope (script.js ran
-   $('.grid').isotope(...) at window.load): Bootstrap set only each tile's
-   width, then Isotope placed every tile, in DOM order, into whichever column
-   was currently shortest — flush under that column's last photo. Same rule
-   here, minus the library: THUMB_SIZES gives every aspect ratio up front, so
-   the very same placement decisions can happen synchronously, before a single
-   image has loaded. */
+   The old site handed layout to Isotope: every tile, in order, dropped into
+   whichever column was currently shortest — flush under that column's last
+   photo. Same rule here, minus the library: THUMB_SIZES gives every aspect
+   ratio up front, so it all happens synchronously, before a single image
+   has loaded.
+
+   On top of that, a gallery's featured photos take two columns. A feature
+   waits until two neighbouring columns are nearly level, and the small step
+   left over is taken up by the shorter column's last photo (cropped a touch
+   taller) — so every gutter stays 24px. The bottom is squared off the same
+   way, after trying a few orders of the last photos to keep that crop tiny. */
 
 const GAL_GAP = 24;              // Bootstrap's gutter, as on the old site
-const tileOrder = {};            // tiles per section, in shuffle order
+const tileOrder = {};            // tiles per section, in placement order
 
 /* Three columns at most — Chris prefers the bigger photos — then the old
    site's narrower breakpoints (2 under 768px, 1 under 576px). */
@@ -1853,85 +3003,147 @@ function galColumns(w) {
   return w >= 768 ? 3 : w >= 576 ? 2 : 1;
 }
 
+/* dry: measure only. Returns how ragged the bottom was before squaring. */
+function packTiles(tiles, w, n, dry) {
+  const cw = (w - (n - 1) * GAL_GAP) / n;
+  const H = new Array(n).fill(0), last = new Array(n).fill(null);
+  const put = (t, c, y, tw, th) => { t._left = c * (cw + GAL_GAP); t._top = y; t._w = tw; t._h = th; };
+
+  const normal = (t) => {
+    let c = 0;
+    for (let k = 1; k < n; k++) if (H[k] < H[c]) c = k;
+    const th = cw / t._ar;
+    put(t, c, H[c], cw, th);
+    last[c] = t;
+    H[c] += th + GAL_GAP;
+  };
+  const feature = (t, force) => {
+    let best = null;
+    for (let c = 0; c + 2 <= n; c++) {
+      const top = Math.max(H[c], H[c + 1]), diff = Math.abs(H[c] - H[c + 1]);
+      const score = top + diff * 2;
+      if (!best || score < best.score) best = { c, top, diff, score };
+    }
+    if (best.diff > 70 && !force) return false;
+    for (let k = best.c; k < best.c + 2; k++) {
+      if (best.top > H[k] && last[k]) last[k]._h += best.top - H[k];
+    }
+    const tw = 2 * cw + GAL_GAP, th = tw / t._ar;
+    put(t, best.c, best.top, tw, th);
+    for (let k = best.c; k < best.c + 2; k++) { H[k] = best.top + th + GAL_GAP; last[k] = null; }
+    return true;
+  };
+
+  const waiting = [];
+  for (const t of tiles) {
+    if (t._big && n > 1) { if (!feature(t)) waiting.push(t); continue; }
+    normal(t);
+    if (waiting.length && feature(waiting[0])) waiting.shift();
+  }
+  waiting.forEach((t) => feature(t, true));
+
+  const end = Math.max(...H), ragged = end - Math.min(...H);
+  if (dry) return ragged;
+  for (let k = 0; k < n; k++) if (end > H[k] && last[k]) last[k]._h += end - H[k];
+  for (const t of tiles) {
+    t.style.left = t._left + "px";
+    t.style.top = t._top + "px";
+    t.style.width = t._w + "px";
+    t.style.height = t._h + "px";
+  }
+  return ragged;
+}
+
 function placeMasonry(sec) {
   const grid = $("#grid-" + sec);
   const tiles = tileOrder[sec];
   if (!tiles || !tiles.length) return;
 
-  const cs = getComputedStyle(grid);
-  const inner = (grid.clientWidth || innerWidth)
-    - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0);
+  const w = grid.clientWidth || innerWidth;
   const n = galColumns(innerWidth);
-  const colW = (inner - (n - 1) * GAL_GAP) / n;
 
-  grid.replaceChildren();
-  const cols = [], heights = [];
-  for (let c = 0; c < n; c++) {
-    const div = document.createElement("div");
-    div.className = "gal-col";
-    grid.appendChild(div);
-    cols.push(div);
-    heights.push(0);
+  const tail = Math.max(1, tiles.length - 8), base = tiles.slice(tail);
+  let best = base, bestScore = packTiles(tiles, w, n, true);
+  for (let k = 0; k < 60 && bestScore > 1; k++) {
+    const t = shuffle(base.slice());
+    tiles.splice(tail, t.length, ...t);
+    const score = packTiles(tiles, w, n, true);
+    if (score < bestScore) { bestScore = score; best = t; }
   }
+  tiles.splice(tail, best.length, ...best);
+  packTiles(tiles, w, n, false);
 
-  for (const t of tiles) {
-    let best = 0;
-    for (let c = 1; c < n; c++) if (heights[c] < heights[best]) best = c;
-    cols[best].appendChild(t);
-    heights[best] += colW / t._ar + GAL_GAP;
-  }
+  const end = Math.max(...tiles.map((t) => t._top + t._h));
+  grid.style.height = end + "px";
+  /* the viewer walks the photos in the order they're laid out */
+  shownOrder[sec] = tiles.map((t) => t._ph);
+  tiles.forEach((t, i) => t.setAttribute("aria-label", `View photo ${i + 1} of ${tiles.length}`));
+  grid.append(...tiles);   // keeps Tab order the same as the order on screen
 }
 
 /* Re-pack any open gallery when the viewport changes shape — same tiles,
-   same order, new column count. No reshuffle. */
+   new column count. No reshuffle. */
 function replaceOpenGalleries() {
   for (const sec of GALLERIES) {
-    if ($("#dlg-" + sec).open) placeMasonry(sec);
+    if ($("#dlg-" + sec).open) { placeMasonry(sec); galScrolled(galUI[sec], sec); }
   }
 }
 
-/* The way in from the other galleries — the map itself keeps quiet about it
-   (walking off the top or bottom of the paper is the secret way). Modelled on
-   the old site's centred "Gallery" button under its home grid. */
-$$(".gal-more-btn").forEach((btn) => {
-  btn.textContent =
-    `the whole lot — all ${SITE.collections.everything.photos.length} photographs →`;
-  btn.addEventListener("click", () => openSection("everything"));
-});
+const fileName = (ph) => (ph.thumb || ph.src).split("/").pop();
 
 function buildGallery(sec) {
   const col = SITE.collections[sec];
-  const order = shuffle(col.photos.slice());
-  shownOrder[sec] = order;
+  const ui = galUI[sec];
 
-  $("#sub-" + sec).textContent = `${order.length} photographs · ${col.blurb}`;
+  /* one featured photo leads, the others are spread through the page give or
+     take a couple of places, and everything else is shuffled around them */
+  const feat = new Set(col.featured || []);
+  const big = shuffle(col.photos.filter((ph) => feat.has(fileName(ph)) && (ph.ar || 1.5) >= 1));
+  const order = shuffle(col.photos.filter((ph) => !big.includes(ph)));
+  if (big.length) order.unshift(big[0]);
+  big.slice(1).forEach((ph, k, rest) => {
+    const at = Math.round((k + 1) * order.length / (rest.length + 1)) + Math.floor(Math.random() * 5) - 2;
+    order.splice(clamp(at, 2, order.length), 0, ph);
+  });
+
+  $("#sub-" + sec).textContent = col.blurb;
+  ui.meta.textContent = `${order.length} photographs`;
+  ui.dlg.scrollTop = 0;
+  ui.bar.classList.remove("solid");
+  ui.end.classList.remove("seen");
 
   (revealTimers[sec] || []).forEach(clearTimeout);   // a half-run cascade from last time
   revealTimers[sec] = [];
 
+  const wide = galColumns(innerWidth) > 1;
   const tiles = order.map((ph, i) => {
     const btn = document.createElement("button");
     btn.className = "ph";
-    btn.setAttribute("aria-label", `View photo ${i + 1} of ${order.length}`);
+    btn._ph = ph;
     btn._ar = ph.ar || 1.5;
+    btn._big = big.includes(ph);
 
     const img = document.createElement("img");
     if (i > 5) img.loading = "lazy";
-    /* Every photo shows at its own shape, so reserve that shape before the
-       jpeg arrives — otherwise the lazy loads below the fold would reshuffle
-       the columns as they stream in. */
-    if (ph.ar) img.style.aspectRatio = String(ph.ar);
-    img.src = ph.thumb || ph.src;
+    img.decoding = "async";
+    // a featured photo shows at two columns, wider than the 700px thumb
+    img.src = (btn._big && wide ? ph.src : ph.thumb) || ph.src;
     img.alt = ph.alt || "";
     btn.appendChild(img);
 
-    btn.addEventListener("click", () => openLightbox(sec, i));
+    btn.addEventListener("click", () => openLightbox(sec, tileOrder[sec].indexOf(btn)));
     return btn;
   });
 
   tileOrder[sec] = tiles;
+  ui.grid.replaceChildren();
   placeMasonry(sec);
+  galScrolled(ui, sec);
+}
 
+/* the photos arrive: straight away, or once a carried drawing has landed */
+function revealGallery(sec) {
+  const tiles = tileOrder[sec] || [];
   if (REDUCED.matches) {
     tiles.forEach((t) => t.classList.add("visible"));
     return;
@@ -1941,7 +3153,9 @@ function buildGallery(sec) {
      tab is in the background, which would leave a gallery opened in a hidden
      tab permanently blank. This is also exactly how the old site did it. */
   tiles.forEach((t, i) => {
-    revealTimers[sec].push(setTimeout(() => t.classList.add("visible"), i * STAGGER_MS));
+    /* capped: uncapped, the 121st tile of The Whole Lot waited 9.6 s, and
+       anyone scrolling fast saw rows of empty cards */
+    revealTimers[sec].push(setTimeout(() => t.classList.add("visible"), Math.min(i, 12) * STAGGER_MS));
   });
 }
 
@@ -1963,6 +3177,8 @@ function renderLightbox() {
   // show the (already cached) thumb immediately, then swap in full-res
   lbImg.src = ph.thumb || ph.src;
   lbImg.alt = ph.alt || ph.caption;
+  lbImg.classList.toggle("lb-sized", !!ph.ar);
+  if (ph.ar) lbImg.style.setProperty("--ar", String(ph.ar));
   const next = new Image();
   next.onload = () => {
     if (lbPhotos()[lbIdx] !== ph) return;   // user already moved on
@@ -1970,8 +3186,8 @@ function renderLightbox() {
   };
   next.src = ph.src;
   lbCap.textContent = ph.caption;
+  lbCap.dataset.gallery = SITE.collections[lbSec].title;   // shown when there's no caption
   lbPlace.textContent = ph.place || "";
-  lbPlace.style.display = ph.place ? "" : "none";
   lbCount.textContent = `${lbIdx + 1} / ${lbPhotos().length}`;
   preload(lbIdx + 1); preload(lbIdx - 1);
 }
@@ -2162,5 +3378,6 @@ new ResizeObserver(() => {
 }).observe(stage);
 
 route();                       // honor deep links like index.html#/peaks
+whenIdle(loadAlps);            // the Peaks & Wilds doorway draws with the ski game's ranges
 requestAnimationFrame((t) => { lastT = t; requestAnimationFrame(tick); });
 requestAnimationFrame(() => document.body.classList.add("loaded"));
