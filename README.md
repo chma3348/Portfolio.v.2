@@ -825,16 +825,25 @@ endpoint. The About text is in [index.html](index.html).
 
 ## Deploying
 
-The site is live on GitHub Pages at https://chma3348.github.io/Portfolio.v.2/,
-built straight from `main` — push to `main` and it's up a minute later.
+The site lives at **https://chrisinthewild.com**, hosted on Netlify and built
+straight from `main` on GitHub: push to `main` and it's live a minute later
+(Netlify keeps every deploy, so any one can be rolled back from its dashboard).
 
-**Bump the build tag on every deploy.** In [index.html](index.html), the three
-links to `styles.css`, `photos.js` and `game.js` end in `?v=…` — change it (the
-date and a letter will do) whenever you push. `game.js` passes the same tag on
-to everything it loads later (the two games and `alps.js`). Pages lets browsers
-keep each file for ten minutes, and without the tag a browser could keep the
-old page from its cache while fetching the new scripts — the scripts then look
-for parts of the page that aren't there, and the map never draws.
+- **Domain**: registered at Porkbun. Its DNS has an `A` record (blank host →
+  `75.2.60.5`) and a `CNAME` (`www` → `chrisinthewild.netlify.app`); the MX and
+  SPF records are Porkbun's email forwarding. Netlify issues the HTTPS
+  certificate itself.
+- **[netlify.toml](netlify.toml)**: sends `chrisinthewild.netlify.app` to the real
+  domain, hides the repo's working files (this README, notes, the dev server),
+  and lets browsers keep photos for a week. The page, scripts and styles are
+  re-checked on every visit.
+- **Bump the build tag on every deploy.** In [index.html](index.html), the links
+  to `styles.css`, `photos.js` and `game.js` end in `?v=…` — change it (the date
+  and a letter will do) whenever you push. `game.js` passes it on to everything
+  it loads later. Netlify already makes browsers re-check files, but the tag
+  also covers anyone sitting on a cached copy from before.
+- **Link previews** (`og:` tags in `index.html`) use full `chrisinthewild.com`
+  addresses and a landscape photo; change `og:image` to pick a different one.
 
 ## Files
 
