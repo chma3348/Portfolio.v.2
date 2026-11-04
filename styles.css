@@ -1665,6 +1665,22 @@ body.running-game { overflow: hidden; }
 #signpost:hover .sp-board, #skiSign:hover .sp-board { fill: var(--paper-warm); }
 #signpost:focus-visible, #skiSign:focus-visible { outline: none; }
 #signpost:focus-visible .sp-board, #skiSign:focus-visible .sp-board { stroke: var(--crimson); }
+/* Before it's earned, the sign is just a hint that there's something off that
+   edge: the same post and board, its words in pencil rather than ink. */
+#signpost.sp-hint text, #skiSign.sp-hint text { fill: var(--ink-muted); font-weight: 400; font-size: 12px; }
+.sp-snow { display: none; fill: var(--paper); stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+#skiSign.sp-hint .sp-snow { display: inline; }
+/* walk past and it wobbles on its post, as if brushed */
+.sp-sway { transform-box: fill-box; transform-origin: 50% 100%; }
+.sp-nudge .sp-sway { animation: sp-nudge 720ms ease-out; }
+@keyframes sp-nudge {
+  0%   { transform: rotate(0deg); }
+  25%  { transform: rotate(-5deg); }
+  50%  { transform: rotate(3.5deg); }
+  75%  { transform: rotate(-1.5deg); }
+  100% { transform: rotate(0deg); }
+}
+@media (prefers-reduced-motion: reduce) { .sp-nudge .sp-sway { animation: none; } }
 
 @media (prefers-reduced-motion: reduce) {
   .rk-l1, .rk-l2, .rk-a1, .rk-a2, .rk-tail,

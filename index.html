@@ -28,7 +28,7 @@
      game.js passes it on to everything it loads later). Without it a browser
      can keep the old page from its cache and fetch the new scripts, and the
      map never starts. -->
-<link rel="stylesheet" href="styles.css?v=20261104d">
+<link rel="stylesheet" href="styles.css?v=20261104e">
 </head>
 <body>
 <!-- night mode before the first paint, not after game.js — or a returning
@@ -216,13 +216,19 @@
 
       <!-- one keepsake per way off the paper, each pointing the way you'd
            go to beat it: the run out the right, the ski run out the left -->
+      <!-- One signpost per way off the paper. Until you've earned the keepsake
+           it's a quiet hint ("trail this way"); after, it shows your best.
+           The board is resized to its words by updateSignpost() in game.js. -->
       <g id="signpost" tabindex="0" role="button" style="display:none">
+       <g class="sp-sway">
         <path class="sp-ink" d="M0,31 L0,-1"/>
         <path class="sp-board" d="M33,-23 L-19,-23 L-30,-12 L-19,-1 L33,-1 Z"/>
         <text id="signpostText" x="7" y="-8">0 m</text>
         <path class="sp-ink" d="M-8,25 L8,25"/>
+       </g>
       </g>
       <g id="skiSign" tabindex="0" role="button" style="display:none">
+       <g class="sp-sway">
         <path class="sp-ink" d="M0,31 L0,-1"/>
         <!-- his skis, planted against the post after a run — BEHIND the board,
              tips poking up over it, so they never cover the number -->
@@ -231,8 +237,11 @@
           <path class="sp-ski" d="M-10,26 L-18,-32 C-18.4,-35 -20.5,-37 -23,-36"/>
         </g>
         <path class="sp-board" d="M-33,-23 L19,-23 L30,-12 L19,-1 L-33,-1 Z"/>
+        <!-- a dab of snow on the board, only while it's still a hint -->
+        <path class="sp-snow" d="M2,-22.6 C4,-27 9.5,-27.6 12,-25.4 C14,-27.4 17.6,-26.6 18.6,-23 Z"/>
         <text id="skiSignText" x="-7" y="-8">0 m</text>
         <path class="sp-ink" d="M-8,25 L8,25"/>
+       </g>
       </g>
 
       <!-- ======================= LANDMARKS ======================= -->
@@ -754,8 +763,8 @@
   </button>
 </dialog>
 
-<script src="photos.js?v=20261104d"></script>
+<script src="photos.js?v=20261104e"></script>
 <!-- the games are fetched on demand — see loadGame() in game.js -->
-<script src="game.js?v=20261104d"></script>
+<script src="game.js?v=20261104e"></script>
 </body>
 </html>

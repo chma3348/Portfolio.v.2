@@ -96,7 +96,9 @@ const ARRANGE = {
       sun:     [0.120, 0.365],
       birds:   [0.560, 0.900],   // bottom-centre: clear of the boarding pan AND the contents pill
     },
-    signposts: { runner: [0.062, 0.885], ski: [0.938, 0.795] },
+    // the left one sits in the gap above Say hello: lower down, its board ran
+    // under that label
+    signposts: { runner: [0.07, 0.655], ski: [0.938, 0.795] },
   },
 
   /* Small phones (a 320x568 screen, a landscape phone). Five stacked stops
@@ -203,7 +205,7 @@ function applyLayout(keepPosition = false) {
      the corner" on a desktop puts it 3px from the edge and looks like it's
      falling off the paper. */
   const spSpots = {};
-  const spHalf = 34 * art, spPad = 14;
+  const spHalf = 48 * art, spPad = 14;   // wide enough for the hint's longer board
   for (const g of ["runner", "ski"]) {
     const f = arrangement.signposts && arrangement.signposts[g];
     if (f) {
@@ -859,6 +861,7 @@ function edgePressed() {
 }
 
 function updateEdge(dt) {
+  nudgeSigns();
   if (edgeCooldown > 0) {
     edgeCooldown -= dt;
     edgePush = 0;
@@ -1663,40 +1666,97 @@ function startGame(name) {
 }
 const startRunner = () => startGame("runner");
 
-/* the keepsakes: one signpost per way off the paper, each earned separately
-   and each pointing the way you'd go to beat it */
+/* One signpost per way off the paper, pointing off its edge. Until you've
+   earned the keepsake it's a quiet hint that there's something that way;
+   after, it shows your best and takes you straight back in. */
 const SIGNS = {
   runner: {
     el: $("#signpost"), txt: $("#signpostText"), go: () => leaveTheMap(),
+    side: -1, hint: "trail this way",
     label: (m) => `Your best walk off the map: ${m} metres. Activate to go again.`,
+    hintLabel: "A signpost pointing off the left of the map: trail this way. Activate to walk over.",
   },
   ski: {
     el: $("#skiSign"), txt: $("#skiSignText"), go: () => leaveForSki(),
+    side: 1, hint: "slopes this way",
     label: (m) => `Your best ski run: ${m} metres. Activate to go again.`,
+    hintLabel: "A signpost pointing off the right of the map: slopes this way. Activate to walk over.",
   },
 };
+
+/* The board grows to fit its words, away from its arrow tip, so the tip
+   stays put by the post: "trail this way" needs a longer board than "84 m". */
+function fitBoard(s) {
+  const len = s.txt.getComputedTextLength() || 0;
+  const board = s.el.querySelector(".sp-board");
+  if (s.side < 0) {
+    const xr = Math.max(33, -19 + len + 18);
+    board.setAttribute("d", `M${xr.toFixed(1)},-23 L-19,-23 L-30,-12 L-19,-1 L${xr.toFixed(1)},-1 Z`);
+    s.txt.setAttribute("x", ((-19 + xr) / 2).toFixed(1));
+  } else {
+    const xl = Math.min(-33, 19 - len - 18);
+    board.setAttribute("d", `M${xl.toFixed(1)},-23 L19,-23 L30,-12 L19,-1 L${xl.toFixed(1)},-1 Z`);
+    s.txt.setAttribute("x", ((xl + 19) / 2).toFixed(1));
+  }
+}
 
 function updateSignpost() {
   for (const [name, s] of Object.entries(SIGNS)) {
     const best = bestFor(name);
     const spot = layout.signposts && layout.signposts[name];
     /* the display test has to include the spot: compact deliberately has no
-       room for these, and without this an earned board rendered untransformed
-       at the SVG origin */
-    const show = best >= GAMES[name].keepsakeAt && !!spot;
-    s.el.style.display = show ? "" : "none";
-    if (!show) continue;
-    s.txt.textContent = `${best} m`;
+       room for these, and without this a board rendered untransformed at the
+       SVG origin */
+    s.el.style.display = spot ? "" : "none";
+    if (!spot) continue;
+    s.earned = best >= GAMES[name].keepsakeAt;
+    s.el.classList.toggle("sp-hint", !s.earned);
+    s.txt.textContent = s.earned ? `${best} m` : s.hint;
+    fitBoard(s);
     s.el.setAttribute("transform",
       `translate(${spot.x.toFixed(1)},${spot.y.toFixed(1)}) scale(${layout.art.toFixed(3)})`);
-    s.el.setAttribute("aria-label", s.label(best));
+    s.el.setAttribute("aria-label", s.earned ? s.label(best) : s.hintLabel);
+  }
+}
+// the boards are measured in the hand font, which may land after first paint
+if (document.fonts) document.fonts.ready.then(() => updateSignpost());
+
+/* A hint sign doesn't skip you into the game — it walks you over to its
+   edge, and the map's own "hit the trail" button takes it from there. */
+function followSign(name) {
+  const s = SIGNS[name];
+  if (s.earned) { s.go(); return; }
+  if (busy() || arriving) return;
+  firstInput();
+  const b = layout.bounds, spot = layout.signposts[name];
+  const x = s.side < 0 ? b.x1 : b.x2;
+  const y = clamp(spot.y, b.y1 + 40 * layout.art, b.y2 - 40 * layout.art);
+  if (REDUCED.matches) { pos.x = x; pos.y = y; renderHiker(); }
+  else { target = { x, y }; pingAt(x, y); }
+}
+
+/* walk past one and it gives a little wobble, as if brushed */
+function nudgeSigns() {
+  for (const s of Object.values(SIGNS)) {
+    if (s.el.style.display === "none") continue;
+    const spot = layout.signposts && layout.signposts[s.side < 0 ? "runner" : "ski"];
+    if (!spot) continue;
+    const d = Math.hypot(pos.x - spot.x, pos.y - spot.y);
+    if (!s.near && d < 80 * layout.art) {
+      s.near = true;
+      if (!REDUCED.matches) {
+        s.el.classList.remove("sp-nudge");
+        void s.el.getBoundingClientRect();
+        s.el.classList.add("sp-nudge");
+      }
+    } else if (s.near && d > 130 * layout.art) s.near = false;
   }
 }
 
-for (const s of Object.values(SIGNS)) {
-  s.el.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); s.go(); });
+for (const [name, s] of Object.entries(SIGNS)) {
+  s.el.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); followSign(name); });
   s.el.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); s.go(); }
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); followSign(name); }
   });
 }
 
