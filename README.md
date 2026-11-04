@@ -843,7 +843,9 @@ straight from `main` on GitHub: push to `main` and it's live a minute later
   it loads later. Netlify already makes browsers re-check files, but the tag
   also covers anyone sitting on a cached copy from before.
 - **Link previews** (`og:` tags in `index.html`) use full `chrisinthewild.com`
-  addresses and a landscape photo; change `og:image` to pick a different one.
+  addresses and `photos/share.jpg`, a 1200×630 crop of Travel-49 made for
+  previews (they crop to about 1.9:1). To change it, make a new 1200×630 image
+  and replace that file, or point `og:image` at another one.
 
 ## Files
 
