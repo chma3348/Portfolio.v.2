@@ -826,23 +826,27 @@ endpoint. The About text is in [index.html](index.html).
 
 ## Deploying
 
-The site lives at **https://chrisinthewild.com**, hosted on Netlify and built
-straight from `main` on GitHub: push to `main` and it's live a minute later
-(Netlify keeps every deploy, so any one can be rolled back from its dashboard).
+The site lives at **https://chrisinthewild.com**, on GitHub Pages. Every push
+to `main` runs [.github/workflows/pages.yml](.github/workflows/pages.yml), which
+publishes only the site's own files (the page, scripts, styles and photos), so
+this README, the notes and the dev server stay in the repo and off the site.
+It's live a minute or two after the push; the repo's **Actions** tab shows each
+deploy. (It moved off Netlify because Netlify's free plan forces a
+"Powered by Netlify" badge onto every page.)
 
-- **Domain**: registered at Porkbun. Its DNS has an `A` record (blank host →
-  `75.2.60.5`) and a `CNAME` (`www` → `chrisinthewild.netlify.app`); the MX and
-  SPF records are Porkbun's email forwarding. Netlify issues the HTTPS
-  certificate itself.
-- **[netlify.toml](netlify.toml)**: sends `chrisinthewild.netlify.app` to the real
-  domain, hides the repo's working files (this README, notes, the dev server),
-  and lets browsers keep photos for a week. The page, scripts and styles are
-  re-checked on every visit.
+- **Domain**: registered at Porkbun. Its DNS has four `A` records on the bare
+  domain (`185.199.108.153`, `.109.153`, `.110.153`, `.111.153`) and a `CNAME`
+  (`www` → `chma3348.github.io`); the MX and SPF records are Porkbun's email
+  forwarding. The custom domain is set in the repo's **Settings → Pages**, and
+  GitHub issues the HTTPS certificate itself.
 - **Bump the build tag on every deploy.** In [index.html](index.html), the links
   to `styles.css`, `photos.js` and `game.js` end in `?v=…` — change it (the date
   and a letter will do) whenever you push. `game.js` passes it on to everything
-  it loads later. Netlify already makes browsers re-check files, but the tag
-  also covers anyone sitting on a cached copy from before.
+  it loads later. Pages lets browsers keep files for ten minutes; without the
+  tag a browser could keep the old page and fetch the new scripts, and the map
+  would never draw.
+- **A new file the site needs** (another script, say) has to be added to the
+  `cp` line in the workflow too, or it won't be published.
 - **Link previews** (`og:` tags in `index.html`) use full `chrisinthewild.com`
   addresses and `photos/share.jpg`, a 1200×630 crop of Travel-49 made for
   previews (they crop to about 1.9:1). To change it, make a new 1200×630 image
