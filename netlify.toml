@@ -1,0 +1,55 @@
+# Netlify: the site is plain files, served straight from the repo root.
+# Every push to main deploys.
+[build]
+  publish = "."
+
+# One address. The netlify.app name keeps working behind the scenes (the
+# www DNS record points at it), but visitors and search engines are sent to
+# the real domain, so there's only ever one copy of the site in Google.
+[[redirects]]
+  from = "https://chrisinthewild.netlify.app/*"
+  to = "https://chrisinthewild.com/:splat"
+  status = 301
+  force = true
+
+# The working files in the repo aren't part of the site: send anyone who
+# asks for them to the map instead, as a 404.
+[[redirects]]
+  from = "/README.md"
+  to = "/"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/PRODUCT.md"
+  to = "/"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/dev-server.py"
+  to = "/"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/netlify.toml"
+  to = "/"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/.claude/*"
+  to = "/"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/.gitignore"
+  to = "/"
+  status = 404
+  force = true
+
+# The page, scripts and styles are re-checked on every visit (Netlify's own
+# default), so a deploy can never leave a browser running half-old code. The
+# photos rarely change and are most of the weight, so browsers keep them for
+# a week.
+[[headers]]
+  for = "/photos/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
